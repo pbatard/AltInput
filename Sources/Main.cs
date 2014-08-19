@@ -21,6 +21,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.IO;
+using Ini;
 
 using UnityEngine;
 using KSP.IO;
@@ -32,127 +34,388 @@ using SharpDX.DirectInput;
 
 namespace AltInput
 {
+    /// <summary>
+    /// The range of a axis
+    /// </summary>
+    public struct AltRange
+    {
+        
+        public int Minimum;
+        public int Maximum;
+        /// <summary>The range expressed as a floating point value to speed up computation</summary>
+        public float FloatRange;
+    }
 
+    /// <summary>
+    /// An axis on the input device
+    /// </summary>
+    public struct AltAxis
+    {
+        /// <summary>Whether this axis is available on this controller</summary>
+        public Boolean isAvailable;
+        /// <summary>Name of the KSP FlightCtrlState attribute this axis should map to</summary>
+        public String Mapping;
+        /// <summary>Whether this axis should be inverted</summary>
+        public Boolean Inverted;
+        /// <summary>The range of this axis</summary>
+        // TODO: remove this as we can get it from the Joystick instance
+        public AltRange Range;
+    }
+
+    /// <summary>
+    /// A button on the input device
+    /// </summary>
+    public struct AltButton
+    {
+        /// <summary>Name of the KSP FlightCtrlState attribute this button should map to</summary>
+        public String Mapping;
+        /// <summary>Whether this button action should be inverted</summary>
+        public Boolean Inverted;
+    }
+
+    /// <summary>
+    /// A Point Of View control on the input device
+    /// </summary>
+    public struct AltPOV
+    {
+        public AltButton Up;
+        public AltButton Down;
+        public AltButton Right;
+        public AltButton Left;
+    }
+
+    // TODO: we may derive this from a parent class when we support more than DI
+    /// <summary>
+    /// A Direct Input Device (typically a game controller)
+    /// </summary>
+    public class AltDirectInputDevice
+    {
+        // Names of the DirectInput axes
+        public readonly static List<String> AxisList = new List<String> {
+            "X", "Y", "Z", "RotationX", "RotationY", "RotationZ", "Sliders0", "Sliders1" };
+        public DeviceClass Class;
+        public Guid InstanceGuid;
+        /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
+        /// where 0 indicates that there is no dead zone, 5,000 indicates that the dead
+        /// zone extends over 50 percent of the physical range of the axis on both sides
+        /// of center, and 10,000 indicates that the entire physical range of the axis
+        /// is dead.</summary>
+        public int DeadZone;
+        public AltAxis[] Axis;
+        public AltPOV[] Pov;
+        public AltButton[] Button;
+        public Joystick Joystick;
+
+        public AltDirectInputDevice(DirectInput directInput, DeviceClass deviceClass, Guid instanceGUID)
+        {
+            if (deviceClass != DeviceClass.GameControl)
+                throw new ArgumentException("Class must be 'GameControl'");
+            this.InstanceGuid = instanceGUID;
+            this.Joystick = new Joystick(directInput, instanceGUID);
+            // The values below are the maximum items from directInput
+            this.Axis = new AltAxis[AltDirectInputDevice.AxisList.Count];
+            this.Pov = new AltPOV[this.Joystick.Capabilities.PovCount];
+            this.Button = new AltButton[this.Joystick.Capabilities.ButtonCount];
+        }
+    }
+
+    /// <summary>
+    /// Handles the input device configuration
+    /// </summary>
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
-        public static PluginConfiguration cfg = PluginConfiguration.CreateForType<Config>();
+        // Good developers do NOT let end-users fiddle with XML configuration files...
+        private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
+            @"\Plugins\PluginData\AltInput\config.ini");
+        private DirectInput directInput = new DirectInput();
+        public static List<AltDirectInputDevice> DeviceList = new List<AltDirectInputDevice>();
+        public static float Threshold;
 
+        /// <summary>
+        /// Parse the configuration file and fill the Direct Input device attributes
+        /// </summary>
+        private void SetAttributes(AltDirectInputDevice Device, String Section)
+        {
+            InputRange Range;
+            int DeadZone = 0;
+
+            // Parse the global dead zone attribute for this device. This is the dead zone
+            // that will be applied if there isn't a specific axis override
+            int.TryParse(ini.IniReadValue(Section, "DeadZone"), out Device.DeadZone);
+
+            // Process the axes
+            for (var i = 0; i < AltDirectInputDevice.AxisList.Count; i++)
+            {
+                // We get a NOTFOUND exception when probing the range for unused axes.
+                // Use that to indicate if the axe is available
+                try
+                {
+                    Range = Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i]).Range;
+                    Device.Axis[i].Range.Minimum = Range.Minimum;
+                    Device.Axis[i].Range.Maximum = Range.Maximum;
+                    Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
+
+                    // TODO: check if mapping name is valid and if it's already been assigned
+                    Device.Axis[i].Mapping = ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i]);
+                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i] + ".DeadZone"), out DeadZone);
+                    if (DeadZone == 0)
+                        // Override with global dead zone if none was specified
+                        // NB: This prohibits setting a global dead zone and then an individual to 0 - oh well...
+                        DeadZone = Device.DeadZone;
+                    Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i]).DeadZone = DeadZone;
+                    Boolean.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i] + ".Inverted"),
+                        out Device.Axis[i].Inverted);
+                    Device.Axis[i].isAvailable = (Device.Axis[i].Range.FloatRange != 0.0f);
+                    if (! Device.Axis[i].isAvailable)
+                        print("Altinput: WARNING - Axis " + AltDirectInputDevice.AxisList[i] +
+                            " was disabled because its range is zero.");
+
+                }
+                catch (Exception) {
+                    Device.Axis[i].isAvailable = false;
+                }
+#if (DEBUG)
+                print("Altinput: Axis #" + i + ": isPresent = " + Device.Axis[i].isAvailable +
+                    ", Mapping = " + Device.Axis[i].Mapping +
+                    ", DeadZone = " + DeadZone +
+                    ", Inverted = " + Device.Axis[i].Inverted +
+                    ", RangeMin = " + Device.Axis[i].Range.Minimum +
+                    ", RangeMax = " + Device.Axis[i].Range.Maximum);
+#endif
+            }
+
+            // Process the POV controls
+            for (var i = 0; i < Device.Joystick.Capabilities.PovCount; i++)
+            {
+                Device.Pov[i].Up.Mapping = ini.IniReadValue(Section, "POVs" + i + ".Up");
+                Device.Pov[i].Down.Mapping = ini.IniReadValue(Section, "POVs" + i + ".Down");
+                Device.Pov[i].Left.Mapping = ini.IniReadValue(Section, "POVs" + i + ".Left");
+                Device.Pov[i].Right.Mapping = ini.IniReadValue(Section, "POVs" + i + ".Right");
+#if (DEBUG)
+                print("Altinput: POV #" + i + ": Up = " + Device.Pov[i].Up.Mapping +
+                    ", Down = " + Device.Pov[i].Down.Mapping +
+                    ", Left = " + Device.Pov[i].Left.Mapping +
+                    ", Right = " + Device.Pov[i].Right.Mapping);
+#endif
+            }
+
+            // Process the buttons
+            for (var i = 0; i < Device.Joystick.Capabilities.ButtonCount; i++)
+            {
+                Device.Button[i].Mapping = ini.IniReadValue(Section, "Buttons" + i);
+#if (DEBUG)
+                print("Altinput: Button #" + i + ": Mapping = " + Device.Button[i].Mapping);
+#endif
+            }
+
+        }
+
+        /// <summary>
+        /// This method is the first called by the Unity engine when it instantiates
+        /// the game element it is associated to (here the main game menu)
+        /// </summary>
         void Awake()
         {
-            print("AltInput: Saving configuration...");
-            cfg.SetValue("Test", "value");
-            cfg.save();
+            // Try to match the devices we find with our config file
+            int NumDevices = 0;
+            String InterfaceName, ClassName, DeviceName;
+            AltDirectInputDevice Device;
+            DeviceClass InstanceClass = DeviceClass.GameControl;
+            Boolean found;
+
+            Int32.TryParse(ini.IniReadValue("global", "NumDevices"), out NumDevices);
+            if (NumDevices == 0)
+                NumDevices = 4;
+            float.TryParse(ini.IniReadValue("global", "Threshold"), out Threshold);
+
+            for (var i = 1; i <= NumDevices; i++)
+            {
+                String InputName = "input" + i;
+                InterfaceName = ini.IniReadValue(InputName, "Interface");
+                if ((InterfaceName != "") && (InterfaceName != "DirectInput")) {
+                    print("AltInput[" + InputName + "]: Only 'DirectInput' is supported for Interface type");
+                } else {
+                    ClassName = ini.IniReadValue(InputName, "Class");
+                    if (ClassName == "")
+                        ClassName = "GameControl";
+                    else if (ClassName != "GameControl") {
+                        print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
+                        continue;   // ignore the device
+                    }
+                    // Overkill for now, but may come handy if we add support for other DirectInput devices
+                    foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
+                    {
+                        if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
+                        {
+                            InstanceClass = Class;
+                            break;
+                        }
+                    }
+                    DeviceName = ini.IniReadValue(InputName, "Name");
+
+                    foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
+                    {
+                        if ((DeviceName == "") || (dev.InstanceName == DeviceName)) {
+                            found = false;
+                            foreach (var Instance in DeviceList) {
+                                if (Instance.InstanceGuid == dev.InstanceGuid) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (found)
+                                continue;
+                            // Only add this device if not already present in our list
+                            Device = new AltDirectInputDevice(directInput, InstanceClass, dev.InstanceGuid);
+                            SetAttributes(Device, InputName);
+                            DeviceList.Add(Device);
+                            print("AltInput: Added controller '" + dev.InstanceName + "'");
+                        }
+                    }
+                }
+            }
+            if (DeviceList.Count == 0)
+            {
+                print("AltInput: No controller found");
+                return;
+            }
         }
 
     }
 
+    /// <summary>
+    /// Handles the input device in-flight actions
+    /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class ProcessInput : MonoBehaviour
     {
-        public static Vessel ActiveVessel = null;
-        private ScreenMessageStyle MessageStyle = ScreenMessageStyle.UPPER_LEFT;
-        private Joystick joystick = null;
-        private DirectInput directInput = null;
-        private Guid joystickGuid = Guid.Empty;
         private static FlightCtrlState UpdatedState = null;
-        // TODO: read this from the config file
-        const float Threshold = 0.005f;
 
-        private void AxisInput(FlightCtrlState ActiveState)
+        /// <summary>
+        /// Update a Flight Vessel axis control (including throttle) by name
+        /// </summary>
+        /// <param name="Name">The name of the axis to update</param>
+        /// <param name="value">The value to set</param>
+        private void UpdateAxis(String Name, float value)
         {
-            ActiveVessel = FlightGlobals.ActiveVessel;
-            if (ActiveVessel == null)
+            // TODO: Something more elegant (possibly using reflection?)
+            switch (Name)
+            {
+                // TODO: Add the other supported axes such as X, Y, wheelSteer
+                case "yaw":
+                    UpdatedState.yaw = value;
+                    break;
+                case "pitch":
+                    UpdatedState.pitch = value;
+                    break;
+                case "roll":
+                    UpdatedState.roll = value;
+                    break;
+                case "mainThrottle":
+                    UpdatedState.mainThrottle = (value + 1.0f) / 2.0f;
+                    if (UpdatedState.mainThrottle < Config.Threshold)
+                        UpdatedState.mainThrottle = 0.0f;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Update the current state of the spacecraft according all inputs
+        /// </summary>
+        /// <param name="CurrentState">The current flight control state</param>
+        private void UpdateState(ref FlightCtrlState CurrentState)
+        {
+            if (Math.Abs(CurrentState.yaw) < Math.Abs(UpdatedState.yaw))
+                CurrentState.yaw = UpdatedState.yaw;
+            if (Math.Abs(CurrentState.pitch) < Math.Abs(UpdatedState.pitch))
+                CurrentState.pitch = UpdatedState.pitch;
+            if (Math.Abs(CurrentState.roll) < Math.Abs(UpdatedState.roll))
+                CurrentState.roll = UpdatedState.roll;
+            if (CurrentState.mainThrottle < UpdatedState.mainThrottle)
+                CurrentState.mainThrottle = UpdatedState.mainThrottle;
+
+            // If SAS is on, we need to override it or else our changes are ignored
+            Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > Config.Threshold) ||
+                                  (Math.Abs(CurrentState.yaw) > Config.Threshold) || 
+                                  (Math.Abs(CurrentState.roll) > Config.Threshold);
+            FlightGlobals.ActiveVessel.vesselSAS.ManualOverride(overrideSAS);
+        }
+
+        /// <summary>
+        /// Update the flight control state according to our inputs
+        /// </summary>
+        /// <param name="CurrentState">The current control state for the active vessel</param>
+        private void ControllerInput(FlightCtrlState CurrentState)
+        {
+            // Does this ever occur?
+            if (FlightGlobals.ActiveVessel == null)
             {
                 UpdatedState = null;
                 // No need to do anything
                 return;
             }
-            if (joystick != null)
+            if (Config.DeviceList.Count != 0)
             {
                 ConfigNode dupe = new ConfigNode();
                 if (UpdatedState == null)
                 {
+                    // This is the first time we have a state => create a copy
+                    // which we'll use to keep track of our Joystick state.
+                    // We need to do this as GetBufferedData() only returns
+                    // a status if there was a change since last call.
                     UpdatedState = new FlightCtrlState();
-                    ActiveState.Save(dupe);
+                    CurrentState.Save(dupe);
                     UpdatedState.Load(dupe);
                 }
-
-                joystick.Poll();
-                var data = joystick.GetBufferedData();
-                foreach (var state in data)
+                foreach (var Device in Config.DeviceList)
                 {
-                    // TODO: pick the range and deal with inversions dynamically
-                    if (state.Offset == JoystickOffset.X)
-                        UpdatedState.yaw = (state.Value - 32768.0f) / 32768.0f;
-                    if (state.Offset == JoystickOffset.Y)
-                        UpdatedState.pitch = (state.Value - 32768.0f) / 32768.0f;
-                    if (state.Offset == JoystickOffset.RotationZ)
-                        UpdatedState.roll = (state.Value - 32768.0f) / 32768.0f;
-                    if (state.Offset == JoystickOffset.Sliders0)
+                    Device.Joystick.Poll();
+                    var data = Device.Joystick.GetBufferedData();
+                    foreach (var state in data)
                     {
-                        UpdatedState.mainThrottle = (65536.0f - state.Value) / 65536.0f;
-                        if (UpdatedState.mainThrottle < Threshold)
-                            UpdatedState.mainThrottle = 0.0f;
+                        for (var i = 0; i < AltDirectInputDevice.AxisList.Count; i++)
+                        {
+                            if ((!Device.Axis[i].isAvailable) || (String.IsNullOrEmpty(Device.Axis[i].Mapping)))
+                                continue;
+                            if (Enum.GetName(typeof(JoystickOffset), state.Offset) == AltDirectInputDevice.AxisList[i])
+                            {
+                                float value = ((state.Value - Device.Axis[i].Range.Minimum) / (0.5f * Device.Axis[i].Range.FloatRange)) - 1.0f;
+                                if (Device.Axis[i].Inverted)
+                                    value = -value;
+                                UpdateAxis(Device.Axis[i].Mapping, value);
+                            }
+                        }
                     }
+                    UpdateState(ref CurrentState);
                 }
-                // If SAS is on, we need to override it or else our changes are ignored
-                Boolean overrideSAS = (Math.Abs(UpdatedState.pitch) > Threshold) ||
-                    (Math.Abs(UpdatedState.yaw) > Threshold) || (Math.Abs(UpdatedState.roll) > Threshold);
-                ActiveVessel.vesselSAS.ManualOverride(overrideSAS);
-                UpdatedState.Save(dupe);
-                ActiveState.Load(dupe);
             }
-        }
-
-        public void Awake()
-        {
-            ScreenMessages.PostScreenMessage("AltInput Awake", 10f, MessageStyle);
         }
 
         public void Start()
         {
-            // https://github.com/sharpdx/SharpDX-Samples/blob/master/WindowsDesktop/DirectInput/JoystickApp/Program.cs
-            // Initialize DirectInput
-            directInput = new DirectInput();
-            // Find a Joystick Guid
-            joystickGuid = Guid.Empty;
-            foreach (var deviceInstance in directInput.GetDevices(SharpDX.DirectInput.DeviceType.Gamepad,
-                DeviceEnumerationFlags.AllDevices))
-                joystickGuid = deviceInstance.InstanceGuid;
-            // If Gamepad not found, look for a Joystick
-            if (joystickGuid == Guid.Empty)
-                foreach (var deviceInstance in directInput.GetDevices(SharpDX.DirectInput.DeviceType.Joystick,
-                    DeviceEnumerationFlags.AllDevices))
-                    joystickGuid = deviceInstance.InstanceGuid;
-            // If Joystick not found, throws an error
-            if (joystickGuid == Guid.Empty)
+#if (DEBUG)
+            print("AltInput: ProcessInput.Start()");
+#endif
+            // TODO: only list/acquire controller if we have some mapping assigned
+            foreach (var Device in Config.DeviceList)
             {
-                ScreenMessages.PostScreenMessage("AltInput: No joystick found.", 10f, MessageStyle);
-                return;
+                ScreenMessages.PostScreenMessage("AltInput: Using Controller '" +
+                    Device.Joystick.Information.InstanceName + "' (Axes: " + 
+                    Device.Joystick.Capabilities.AxeCount + ", Buttons: " + 
+                    Device.Joystick.Capabilities.ButtonCount + ", POVs: " +
+                    Device.Joystick.Capabilities.PovCount + ")", 10f, ScreenMessageStyle.UPPER_LEFT);
+                // Set BufferSize in order to use buffered data.
+                Device.Joystick.Properties.BufferSize = 128;
+                Device.Joystick.Acquire();
             }
-
-            // Instantiate the joystick
-            joystick = new Joystick(directInput, joystickGuid);
-            ScreenMessages.PostScreenMessage("AltInput: Found " + joystick.Information.InstanceName, 10f, MessageStyle);
-            ScreenMessages.PostScreenMessage("AltInput: Axes: " + joystick.Capabilities.AxeCount + ", Buttons: " +
-                joystick.Capabilities.ButtonCount + ", POVs: " + joystick.Capabilities.PovCount, 10f, MessageStyle);
-            // Set BufferSize in order to use buffered data.
-            joystick.Properties.BufferSize = 128;
-            // Acquire the joystick
-            joystick.Acquire();
-            // Set our deadzones
-            // TODO: read those from the config file
-            foreach (var name in new string[] { "X", "Y", "RotationZ" })
-            {
-                var prop = joystick.GetObjectPropertiesByName(name);
-                prop.DeadZone = 1000;
-            }
-
+            if (Config.DeviceList.Count == 0)
+                ScreenMessages.PostScreenMessage("AltInput: No controller detected", 10f,
+                    ScreenMessageStyle.UPPER_LEFT);
             // Add our handler
-            ActiveVessel = FlightGlobals.ActiveVessel;
+            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
             if (ActiveVessel != null)
-                ActiveVessel.OnFlyByWire += new FlightInputCallback(AxisInput);
+                ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
         }
     }
 
