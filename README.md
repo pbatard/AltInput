@@ -1,5 +1,6 @@
-AltInput — Alternate Input module for Kerbal Space Program
+AltInput — Alternate Input plugin for Kerbal Space Program
 ==========================================================
+
 
 Description
 --------------------------------------
@@ -14,6 +15,7 @@ __IMPORTANT:__ This module provides its OWN version of the [SharpDX](http://shar
 DLLs, due to a [BUG](https://github.com/sharpdx/SharpDX/issues/406) in the Unity engine.
 If you try to deploy with the standard version of SharpDX, it __WILL NOT WORK!__
 
+
 Compilation
 --------------------------------------
 
@@ -27,6 +29,7 @@ according to your path:
 * Open the project and compile. If you edited the `KSPPath` variable above, all
   the required module files will be copied automatically.
 
+
 Usage
 --------------------------------------
 
@@ -37,44 +40,56 @@ Usage
 * Play. ;) If your joystick is properly detected, you will get a notification (in the 
   upper left corner) and you should be able to use it to control the ship.
 
+
 Configuration
 --------------------------------------
 
 All configuration is done in `PluginData\AltInput\config.ini`
 
-__As of version 0.2__, the following DirectInput controls, if present, can be assigned
-to Vessel Control:
+__As of version 0.3__, the following DirectInput controls, if present, can be assigned
+to Vessel Control. These are the names you should use for `Control` when adding a
+`Control = Mapping` line in your config file:
 * `X`
 * `Y`
 * `Z`
 * `RotationX`
 * `RotationY`
 * `RotationZ`
-* `Sliders[0-1]` (the Throttle is usually mapped to one of these)
+* `Slider[1-2]`
+* `Button[1-128]`
 
 The following are not handled yet:
-* `PointOfViewControllers[0-3]`
-* `Buttons[0-127]`
+* `POV[1-4]`
 * `VelocityX`
 * `VelocityY`
 * `VelocityZ`
 * `AngularVelocityX`
 * `AngularVelocityY`
 * `AngularVelocityZ`
-* `VelocitySliders[0-1]`
+* `VelocitySlider[1-2]`
 * `AccelerationX`
 * `AccelerationY`
 * `AccelerationZ`
 * `AngularAccelerationX`
 * `AngularAccelerationY`
 * `AngularAccelerationZ`
-* `AccelerationSliders[0-1]`
+* `AccelerationSlider[1-2]`
 
-The following KSP controls can be mapped to an input:
+The following KSP controls can be mapped to an input. These are the names you should
+use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `yaw`
-* `picth`
+* `pitch`
 * `roll`
 * `mainThrottle`
+* `ActivateNextStage`
+* `KSPActionGroup.Stage`
+* `KSPActionGroup.Gear`
+* `KSPActionGroup.Light`
+* `KSPActionGroup.RCS`
+* `KSPActionGroup.SAS`
+* `KSPActionGroup.Brakes`
+* `KSPActionGroup.Abort`
+* `KSPActionGroup.Custom[01-10]`
 
 And the following are not handled yet:
 * `fastThrottle`
@@ -92,11 +107,18 @@ And the following are not handled yet:
 * `X`
 * `Y`
 * `Z`
-* `KSPActionGroup.Stage`
-* `KSPActionGroup.Gear`
-* `KSPActionGroup.Light`
-* `KSPActionGroup.RCS`
-* `KSPActionGroup.SAS`
-* `KSPActionGroup.Brakes`
-* `KSPActionGroup.Abort`
-* `KSPActionGroup.Custom[01-10]`
+
+
+How do I find the names I should use for my controls?
+--------------------------------------
+
+The control names should follow what Windows report when checking your game
+controller properties. For instance, using Windows 8, if you go to _Device and
+Printers_ you should be able to access the _Game controller settings_ menu by
+right clicking on your device. Then, if you select _Properties_, you will be
+presented with a dialog where all the buttons and axes your controller provides
+are labelled. Matching these names with the ones from the first list above is
+then a trivial matter.
+
+__Hint:__ You can also easily identify which button is which in this dialog by
+pressing them and writing down the number that gets highlighted then.
