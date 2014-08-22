@@ -46,7 +46,7 @@ Configuration
 
 All configuration is done in `PluginData\AltInput\config.ini`
 
-__As of version 0.3__, the following DirectInput controls, if present, can be assigned
+__As of version 0.4__, the following DirectInput controls, if present, can be assigned
 to Vessel Control. These are the names you should use for `Control` when adding a
 `Control = Mapping` line in your config file:
 * `X`
@@ -57,9 +57,9 @@ to Vessel Control. These are the names you should use for `Control` when adding 
 * `RotationZ`
 * `Slider[1-2]`
 * `Button[1-128]`
-
-The following are not handled yet:
 * `POV[1-4]`
+
+The following DirectInput controls are not handled:
 * `VelocityX`
 * `VelocityY`
 * `VelocityZ`
@@ -81,6 +81,9 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `pitch`
 * `roll`
 * `mainThrottle`
+* `X`
+* `Y`
+* `Z`
 * `ActivateNextStage`
 * `KSPActionGroup.Stage`
 * `KSPActionGroup.Gear`
@@ -104,9 +107,6 @@ And the following are not handled yet:
 * `wheelSteerTrim`
 * `wheelThrottle`
 * `wheelThrottleTrim`
-* `X`
-* `Y`
-* `Z`
 
 
 How do I find the names I should use for my controls?

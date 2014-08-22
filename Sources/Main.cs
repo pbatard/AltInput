@@ -71,6 +71,8 @@ namespace AltInput
     {
         /// <summary>Name of the KSP FlightCtrlState attribute this button should map to</summary>
         public String Mapping;
+        /// <summary>For an axis, the value we pass to KSP when the button is pressed</summary>
+        public float Value;
         /// <summary>Whether this button action should be inverted</summary>
         public Boolean Inverted;
     }
@@ -98,6 +100,7 @@ namespace AltInput
             { "X", "X" }, { "Y", "Y" }, { "Z", "Z" },
             { "RotationX", "RotationX" }, { "RotationY", "RotationY" }, { "RotationZ", "RotationZ" },
             { "Sliders0", "Slider1" }, { "Sliders1", "Slider2" } };
+        public readonly String[] KSPAxisList = { "yaw", "pitch", "roll", "mainThrottle", "X", "Y", "Z" };
         public DeviceClass Class;
         public Guid InstanceGuid;
         /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
@@ -118,7 +121,7 @@ namespace AltInput
             this.InstanceGuid = instanceGUID;
             this.Joystick = new Joystick(directInput, instanceGUID);
             // The values below are the maximum items from directInput
-            this.Axis = new AltAxis[AltDirectInputDevice.AxisList.Length];
+            this.Axis = new AltAxis[AltDirectInputDevice.AxisList.GetLength(0)];
             this.Pov = new AltPOV[this.Joystick.Capabilities.PovCount];
             this.Button = new AltButton[this.Joystick.Capabilities.ButtonCount];
         }
@@ -134,8 +137,20 @@ namespace AltInput
         private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
             @"\Plugins\PluginData\AltInput\config.ini");
         private DirectInput directInput = new DirectInput();
+        private static readonly String[] Separators = { "[", "]", " ", "\t" };
         public static List<AltDirectInputDevice> DeviceList = new List<AltDirectInputDevice>();
         public static float Threshold;
+
+        private void ParseButton(ref AltButton Button, String ConfigData)
+        {
+            try
+            {
+                String[] Values = ConfigData.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+                Button.Mapping = Values[0];
+                float.TryParse(Values[1], out Button.Value);
+            }
+            catch (Exception) { }
+        }
 
         /// <summary>
         /// Parse the configuration file and fill the Direct Input device attributes
@@ -150,38 +165,39 @@ namespace AltInput
             int.TryParse(ini.IniReadValue(Section, "DeadZone"), out Device.DeadZone);
 
             // Process the axes
-            for (var i = 0; i < AltDirectInputDevice.AxisList.Length; i++)
+            for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
             {
                 // We get a NOTFOUND exception when probing the range for unused axes.
                 // Use that to indicate if the axe is available
                 try
                 {
-                    Range = Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i,0]).Range;
+                    Range = Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i, 0]).Range;
                     Device.Axis[i].Range.Minimum = Range.Minimum;
                     Device.Axis[i].Range.Maximum = Range.Maximum;
                     Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
 
                     // TODO: check if mapping name is valid and if it's already been assigned
-                    Device.Axis[i].Mapping = ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i,1]);
-                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i,1] + ".DeadZone"), out DeadZone);
+                    Device.Axis[i].Mapping = ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1]);
+                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out DeadZone);
                     if (DeadZone == 0)
                         // Override with global dead zone if none was specified
                         // NB: This prohibits setting a global dead zone and then an individual to 0 - oh well...
                         DeadZone = Device.DeadZone;
-                    Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i,0]).DeadZone = DeadZone;
-                    Boolean.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i,1] + ".Inverted"),
+                    Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i, 0]).DeadZone = DeadZone;
+                    Boolean.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".Inverted"),
                         out Device.Axis[i].Inverted);
                     Device.Axis[i].isAvailable = (Device.Axis[i].Range.FloatRange != 0.0f);
-                    if (! Device.Axis[i].isAvailable)
-                        print("Altinput: WARNING - Axis " + AltDirectInputDevice.AxisList[i,1] +
+                    if (!Device.Axis[i].isAvailable)
+                        print("Altinput: WARNING - Axis " + AltDirectInputDevice.AxisList[i, 1] +
                             " was disabled because its range is zero.");
 
                 }
-                catch (Exception) {
+                catch (Exception)
+                {
                     Device.Axis[i].isAvailable = false;
                 }
 #if (DEBUG)
-                print("Altinput: Axis #" + (i+1) + ": isPresent = " + Device.Axis[i].isAvailable +
+                print("Altinput: Axis #" + (i + 1) + ": isPresent = " + Device.Axis[i].isAvailable +
                     ", Mapping = " + Device.Axis[i].Mapping +
                     ", DeadZone = " + DeadZone +
                     ", Inverted = " + Device.Axis[i].Inverted +
@@ -193,24 +209,25 @@ namespace AltInput
             // Process the POV controls
             for (var i = 1; i <= Device.Joystick.Capabilities.PovCount; i++)
             {
-                Device.Pov[i-1].Up.Mapping = ini.IniReadValue(Section, "POV" + i + ".Up");
-                Device.Pov[i-1].Down.Mapping = ini.IniReadValue(Section, "POV" + i + ".Down");
-                Device.Pov[i-1].Left.Mapping = ini.IniReadValue(Section, "POV" + i + ".Left");
-                Device.Pov[i-1].Right.Mapping = ini.IniReadValue(Section, "POV" + i + ".Right");
+                ParseButton(ref Device.Pov[i-1].Up, ini.IniReadValue(Section, "POV" + i + ".Up"));
+                ParseButton(ref Device.Pov[i-1].Down, ini.IniReadValue(Section, "POV" + i + ".Down"));
+                ParseButton(ref Device.Pov[i-1].Left, ini.IniReadValue(Section, "POV" + i + ".Left"));
+                ParseButton(ref Device.Pov[i-1].Right, ini.IniReadValue(Section, "POV" + i + ".Right"));
 #if (DEBUG)
-                print("Altinput: POV #" + i + ": Up = " + Device.Pov[i-1].Up.Mapping +
-                    ", Down = " + Device.Pov[i-1].Down.Mapping +
-                    ", Left = " + Device.Pov[i-1].Left.Mapping +
-                    ", Right = " + Device.Pov[i-1].Right.Mapping);
+                print("Altinput: POV #" + i + ": Up = " + Device.Pov[i-1].Up.Mapping + ", Value = " + Device.Pov[i-1].Up.Value +
+                    ", Down = " + Device.Pov[i-1].Down.Mapping + ", Value = " + Device.Pov[i-1].Down.Value +
+                    ", Left = " + Device.Pov[i-1].Left.Mapping + ", Value = " + Device.Pov[i-1].Left.Value +
+                    ", Right = " + Device.Pov[i-1].Right.Mapping + ", Value = " + Device.Pov[i-1].Right.Value);
 #endif
             }
 
             // Process the buttons
             for (var i = 1; i <= Device.Joystick.Capabilities.ButtonCount; i++)
             {
-                Device.Button[i-1].Mapping = ini.IniReadValue(Section, "Button" + i);
+                ParseButton(ref Device.Button[i-1], ini.IniReadValue(Section, "Button" + i));
 #if (DEBUG)
-                print("Altinput: Button #" + i + ": Mapping = " + Device.Button[i-1].Mapping);
+                print("Altinput: Button #" + i + ": Mapping = " + Device.Button[i-1].Mapping +
+                    ", Value = " + Device.Button[i-1].Value);
 #endif
             }
 
@@ -307,7 +324,7 @@ namespace AltInput
             // TODO: Something more elegant (possibly using reflection or HashTable)
             switch (Name)
             {
-                // TODO: Add the other supported axes such as X, Y, wheelSteer
+                // TODO: Add the other supported axes such as wheelSteer
                 case "yaw":
                     UpdatedState.yaw = value;
                     break;
@@ -316,6 +333,15 @@ namespace AltInput
                     break;
                 case "roll":
                     UpdatedState.roll = value;
+                    break;
+                case "X":
+                    UpdatedState.X = value;
+                    break;
+                case "Y":
+                    UpdatedState.Y = value;
+                    break;
+                case "Z":
+                    UpdatedState.Z = value;
                     break;
                 case "mainThrottle":
                     UpdatedState.mainThrottle = (value + 1.0f) / 2.0f;
@@ -330,42 +356,51 @@ namespace AltInput
         /// </summary>
         /// <param name="Name">The name of the axis to update</param>
         /// <param name="value">The value to set</param>
-        private void UpdateButton(String Name, Boolean pressed)
+        private void UpdateButton(AltButton Button, Boolean Pressed)
         {
             // TODO: Something more elegant (possibly using reflection or HashTable)
-            switch (Name)
+            switch (Button.Mapping)
             {
+                case "yaw":
+                case "pitch":
+                case "roll":
+                case "X":
+                case "Y":
+                case "Z":
+                case "mainThrottle":
+                    UpdateAxis(Button.Mapping, Pressed ? Button.Value : 0.0f);
+                    break;
                 case "ActivateNextStage":
-                    if (pressed)
+                    if (Pressed)
                         Staging.ActivateNextStage();
                     break;
                 case "KSPActionGroup.Stage":
                     // What does this do???
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Stage);
                     break;
                 case "KSPActionGroup.Gear":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Gear);
                     break;
                 case "KSPActionGroup.Light":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Light);
                     break;
                 case "KSPActionGroup.RCS":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
                     break;
                 case "KSPActionGroup.SAS":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
                     break;
                 case "KSPActionGroup.Brakes":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
                     break;
                 case "KSPActionGroup.Abort":
-                    if (pressed)
+                    if (Pressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Abort);
                     break;
                 case "KSPActionGroup.Custom01":
@@ -379,15 +414,84 @@ namespace AltInput
                 case "KSPActionGroup.Custom09":
                 case "KSPActionGroup.Custom10":
                     int i;
-                    int.TryParse(Name.Substring("KSPActionGroup.Custom##".Length), out i);
+                    int.TryParse(Button.Mapping.Substring("KSPActionGroup.Custom##".Length), out i);
                     if (i > 0)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup((KSPActionGroup)(128 << i));
                     break;
             }
         }
 
+        private void UpdatePOV(AltPOV Pov, int Value)
+        {
+            // Value is an angle in degrees * 100, or -1 at rest.
+            // Now, since my POV has only 8 discrete positions, and I don't care that
+            // much about trying to sin'ing and cos'ing the angle to send a proportional
+            // axis value, I'm gonna use a plain old switch with hardcoded angles.
+            // If you're unhappy about this, you can send a patch!
+            switch (Value)
+            {
+                // Be mindful that, if you use an axis for say Left and Right, the
+                // "true" action(s) need to comes last, else you might end up setting
+                // your axis to 1.0, and then undoing it to 0.0 on false...
+                case 0: // Top
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Right, false);
+                    UpdateButton(Pov.Up, true);
+                    break;
+                case 4500: // Top-Right
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Up, true);
+                    UpdateButton(Pov.Right, true);
+                    break;
+                case 9000: // Right
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Right, true);
+                    break;
+                case 13500: // Down-Right
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Down, true);
+                    UpdateButton(Pov.Right, true);
+                    break;
+                case 18000: // Down
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Right, false);
+                    UpdateButton(Pov.Down, true);
+                    break;
+                case 22500: // Down-Left
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Right, false);
+                    UpdateButton(Pov.Down, true);
+                    UpdateButton(Pov.Left, true);
+                    break;
+                case 27000: // Left
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Right, false);
+                    UpdateButton(Pov.Left, true);
+                    break;
+                case 31500: // Up-Left
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Right, false);
+                    UpdateButton(Pov.Up, true);
+                    UpdateButton(Pov.Left, true);
+                    break;
+                default:    // Rest
+                    UpdateButton(Pov.Up, false);
+                    UpdateButton(Pov.Down, false);
+                    UpdateButton(Pov.Left, false);
+                    UpdateButton(Pov.Right, false);
+                    break;
+            }
+        }
+
         /// <summary>
-        /// Update the current state of the spacecraft according all inputs
+        /// Update the current state of the spacecraft according to all inputs
         /// </summary>
         /// <param name="CurrentState">The current flight control state</param>
         private void UpdateState(ref FlightCtrlState CurrentState)
@@ -398,6 +502,12 @@ namespace AltInput
                 CurrentState.pitch = UpdatedState.pitch;
             if (Math.Abs(CurrentState.roll) < Math.Abs(UpdatedState.roll))
                 CurrentState.roll = UpdatedState.roll;
+            if (Math.Abs(CurrentState.X) < Math.Abs(UpdatedState.X))
+                CurrentState.X = UpdatedState.X;
+            if (Math.Abs(CurrentState.Y) < Math.Abs(UpdatedState.Y))
+                CurrentState.Y = UpdatedState.Y;
+            if (Math.Abs(CurrentState.Z) < Math.Abs(UpdatedState.Z))
+                CurrentState.Z = UpdatedState.Z;
             if (CurrentState.mainThrottle < UpdatedState.mainThrottle)
                 CurrentState.mainThrottle = UpdatedState.mainThrottle;
 
@@ -440,7 +550,19 @@ namespace AltInput
                     foreach (var state in data)
                     {
                         String OffsetName = Enum.GetName(typeof(JoystickOffset), state.Offset);
-                        for (var i = 0; i < AltDirectInputDevice.AxisList.Length; i++)
+                        if (OffsetName.StartsWith("Buttons"))
+                        {
+                            // This call should always succeed
+                            uint i = uint.Parse(OffsetName.Substring("Buttons".Length));
+                            // For now we consider that a non zero value means the button is pressed
+                            UpdateButton(Device.Button[i], (state.Value != 0));
+                        }
+                        else if (OffsetName.StartsWith("PointOf"))
+                        {
+                            uint i = uint.Parse(OffsetName.Substring("PointOfViewControllers".Length));
+                            UpdatePOV(Device.Pov[i], state.Value);
+                        }
+                        else for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
                         {
                             if ((!Device.Axis[i].isAvailable) || (String.IsNullOrEmpty(Device.Axis[i].Mapping)))
                                 continue;
@@ -451,17 +573,6 @@ namespace AltInput
                                     value = -value;
                                 UpdateAxis(Device.Axis[i].Mapping, value);
                             }
-                        }
-                        if (OffsetName.StartsWith("Buttons")) {
-                            // Unfortunately, Buttons starts at 0 so we need to do a custom try block to
-                            // avoid TryParse returning 0 on error and mis-assigning a button as a result
-                            try
-                            {
-                                uint i = uint.Parse(OffsetName.Substring("Buttons".Length));
-                                // For now we consider that a non zero value means the button is pressed
-                                UpdateButton(Device.Button[i].Mapping, (state.Value != 0));
-                            }
-                            catch (Exception) { }
                         }
                     }
                     UpdateState(ref CurrentState);
