@@ -53,8 +53,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Sources\Config.cs" />
+    <Compile Include="Sources\Device.cs" />
+    <Compile Include="Sources\DirectInputDevice.cs" />
+    <Compile Include="Sources\Flight.cs" />
+    <Compile Include="Sources\GameState.cs" />
     <Compile Include="Sources\Ini.cs" />
-    <Compile Include="Sources\Main.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
