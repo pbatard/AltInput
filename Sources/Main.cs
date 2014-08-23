@@ -41,7 +41,6 @@ namespace AltInput
     /// </summary>
     public struct AltRange
     {
-        
         public int Minimum;
         public int Maximum;
         /// <summary>The range expressed as a floating point value to speed up computation</summary>
@@ -55,13 +54,18 @@ namespace AltInput
     {
         /// <summary>Whether this axis is available on this controller</summary>
         public Boolean isAvailable;
-        /// <summary>Name of the KSP FlightCtrlState attribute this axis should map to</summary>
-        public String Mapping;
-        /// <summary>Whether this axis should be inverted</summary>
-        public Boolean Inverted;
         /// <summary>The range of this axis</summary>
-        // TODO: remove this as we can get it from the Joystick instance
         public AltRange Range;
+        /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
+        /// where 0 indicates that there is no dead zone, 5,000 indicates that the dead
+        /// zone extends over 50 percent of the physical range of the axis and 10,000
+        /// indicates that the entire physical range of the axis is dead. For regular
+        /// axes, the dead zone applies to the center or, for sliders, to the edges</summary>
+        public int DeadZone;
+        /// <summary>Whether this axis should be inverted</summary>
+        public Boolean[] Inverted;
+        /// <summary>Names of the KSP FlightCtrlState attribute this axis should map to in each mode</summary>
+        public String[] Mapping;
     }
 
     /// <summary>
@@ -69,12 +73,10 @@ namespace AltInput
     /// </summary>
     public struct AltButton
     {
-        /// <summary>Name of the KSP FlightCtrlState attribute this button should map to</summary>
-        public String Mapping;
+        /// <summary>Names of the KSP FlightCtrlState attribute this button should map to in each mode</summary>
+        public String[] Mapping;
         /// <summary>For an axis, the value we pass to KSP when the button is pressed</summary>
-        public float Value;
-        /// <summary>Whether this button action should be inverted</summary>
-        public Boolean Inverted;
+        public float[] Value;
     }
 
     /// <summary>
@@ -82,10 +84,9 @@ namespace AltInput
     /// </summary>
     public struct AltPOV
     {
-        public AltButton Up;
-        public AltButton Down;
-        public AltButton Right;
-        public AltButton Left;
+        // We consider that a POV is a set of 4 buttons
+        public AltButton[] Button;  // Gotta wonder what the heck is wrong with these "high level" languages
+        // when you can't do something as elementary as declaring a BLOODY FIXED SIZE ARRAY IN A STRUCT...
     }
 
     // TODO: we may derive this from a parent class when we support more than DI
@@ -94,13 +95,23 @@ namespace AltInput
     /// </summary>
     public class AltDirectInputDevice
     {
-        // Names for the axes. Using a double string array allows to map not so
-        // user-friendly DirectInput names to more user-friendly config counterparts.
+        /// <summary>POV positions</summary>
+        public enum POVPosition
+        {
+            Up = 0,
+            Right,
+            Down,
+            Left
+        };
+        public readonly static String[] POVPositionName = Enum.GetNames(typeof(POVPosition));
+        public readonly static int NumPOVPositions = POVPositionName.Length;
+
+        /// <summary>Names for the axes. Using a double string array allows to map not so
+        /// user-friendly DirectInput names to more user-friendly config counterparts.</summary>
         public readonly static String[,] AxisList = new String[,] {
-            { "X", "X" }, { "Y", "Y" }, { "Z", "Z" },
+            { "X", "AxisX" }, { "Y", "AxisY" }, { "Z", "AxisZ" },
             { "RotationX", "RotationX" }, { "RotationY", "RotationY" }, { "RotationZ", "RotationZ" },
             { "Sliders0", "Slider1" }, { "Sliders1", "Slider2" } };
-        public readonly String[] KSPAxisList = { "yaw", "pitch", "roll", "mainThrottle", "X", "Y", "Z" };
         public DeviceClass Class;
         public Guid InstanceGuid;
         /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
@@ -120,10 +131,29 @@ namespace AltInput
                 throw new ArgumentException("Class must be 'GameControl'");
             this.InstanceGuid = instanceGUID;
             this.Joystick = new Joystick(directInput, instanceGUID);
-            // The values below are the maximum items from directInput
             this.Axis = new AltAxis[AltDirectInputDevice.AxisList.GetLength(0)];
+            for (var i = 0; i < this.Axis.Length; i++)
+            {
+                this.Axis[i].Mapping = new String[Config.NumGameModes];
+                this.Axis[i].Inverted = new Boolean[Config.NumGameModes];
+            }
             this.Pov = new AltPOV[this.Joystick.Capabilities.PovCount];
+
+            for (var i = 0; i < this.Pov.Length; i++)
+            {
+                this.Pov[i].Button = new AltButton[NumPOVPositions];
+                for (var j = 0; j < NumPOVPositions; j++)
+                {
+                    this.Pov[i].Button[j].Mapping = new String[Config.NumGameModes];
+                    this.Pov[i].Button[j].Value = new float[Config.NumGameModes];
+                }
+            }
             this.Button = new AltButton[this.Joystick.Capabilities.ButtonCount];
+            for (var i = 0; i < this.Button.Length; i++)
+            {
+                this.Button[i].Mapping = new String[Config.NumGameModes];
+                this.Button[i].Value = new float[Config.NumGameModes];
+            }
         }
     }
 
@@ -133,23 +163,77 @@ namespace AltInput
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
+        /// <summary>The game modes we support</summary>
+        public enum GameMode
+        {
+            Flight = 0,
+            EVA,
+            Rover
+        };
+        public readonly static String[] GameModeName = Enum.GetNames(typeof(GameMode));
+        public readonly static int NumGameModes = GameModeName.Length;
+
+        /// <summary>The maximum number of device instances that can be present in a config file</summary>
+        private readonly uint NumDevices = 128;
+        /// <summary>The KSP axes we support</summary>
+        public readonly String[] KSPAxisList = { "yaw", "pitch", "roll", "X", "Y", "Z", "mainThrottle" };
+        /// <summary>The KSP actions we support</summary>
+        public readonly String[] KSPActionList = { "ActivateNextStage", "KSPActionGroup.Stage", "KSPActionGroup.Gear",
+            "KSPActionGroup.Light", "KSPActionGroup.RCS", "KSPActionGroup.SAS", "KSPActionGroup.Brakes",
+            "KSPActionGroup.Abort", "KSPActionGroup.Custom01", "KSPActionGroup.Custom02", "KSPActionGroup.Custom03",
+            "KSPActionGroup.Custom04", "KSPActionGroup.Custom05", "KSPActionGroup.Custom06", "KSPActionGroup.Custom07",
+            "KSPActionGroup.Custom08", "KSPActionGroup.Custom09", "KSPActionGroup.Custom10" };
         // Good developers do NOT let end-users fiddle with XML configuration files...
         private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
             @"\Plugins\PluginData\AltInput\config.ini");
         private DirectInput directInput = new DirectInput();
         private static readonly String[] Separators = { "[", "]", " ", "\t" };
         public static List<AltDirectInputDevice> DeviceList = new List<AltDirectInputDevice>();
-        public static float Threshold;
 
-        private void ParseButton(ref AltButton Button, String ConfigData)
+        private void ParseButton(String Section, String Name, ref AltButton Button)
         {
-            try
+            for (var m = 0; m < NumGameModes; m++)
             {
-                String[] Values = ConfigData.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
-                Button.Mapping = Values[0];
-                float.TryParse(Values[1], out Button.Value);
+                // Try to read from the common section first
+                var ConfigData = ini.IniReadValue(Section, Name);
+                // Then check for an override
+                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name);
+                if (Override != "")
+                    ConfigData = Override;
+                try
+                {
+                    String[] Values = ConfigData.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+                    Button.Mapping[m] = Values[0];
+                    float.TryParse(Values[1], out Button.Value[m]);
+                }
+                catch (Exception) { }
             }
-            catch (Exception) { }
+        }
+
+        private void ParseMapping(String Section, String Name, ref String[] Mapping)
+        {
+            for (var m = 0; m < NumGameModes; m++)
+            {
+                // Try to read a mapping from the common section first
+                Mapping[m] = ini.IniReadValue(Section, Name);
+                // Then check for an override
+                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name);
+                if (Override != "")
+                    Mapping[m] = Override;
+            }
+        }
+
+        private void ParseInverted(String Section, String Name, ref Boolean[] Inverted)
+        {
+            for (var m = 0; m < NumGameModes; m++)
+            {
+                // Try to read the inverted attribute from the common section first
+                Boolean.TryParse(ini.IniReadValue(Section, Name + ".Inverted"), out Inverted[m]);
+                // Then check for an override
+                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name + ".Inverted");
+                if (Override != "")
+                    Boolean.TryParse(Override, out Inverted[m]);
+            }
         }
 
         /// <summary>
@@ -158,7 +242,6 @@ namespace AltInput
         private void SetAttributes(AltDirectInputDevice Device, String Section)
         {
             InputRange Range;
-            int DeadZone = 0;
 
             // Parse the global dead zone attribute for this device. This is the dead zone
             // that will be applied if there isn't a specific axis override
@@ -167,7 +250,7 @@ namespace AltInput
             // Process the axes
             for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
             {
-                // We get a NOTFOUND exception when probing the range for unused axes.
+                // We get a DIERR_NOTFOUND/NotFound exception when probing the range for unused axes.
                 // Use that to indicate if the axe is available
                 try
                 {
@@ -175,125 +258,124 @@ namespace AltInput
                     Device.Axis[i].Range.Minimum = Range.Minimum;
                     Device.Axis[i].Range.Maximum = Range.Maximum;
                     Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
-
+                    ParseMapping(Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Mapping);
                     // TODO: check if mapping name is valid and if it's already been assigned
-                    Device.Axis[i].Mapping = ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1]);
-                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out DeadZone);
-                    if (DeadZone == 0)
+                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out Device.Axis[i].DeadZone);
+                    if (Device.Axis[i].DeadZone == 0)
                         // Override with global dead zone if none was specified
                         // NB: This prohibits setting a global dead zone and then an individual to 0 - oh well...
-                        DeadZone = Device.DeadZone;
-                    Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i, 0]).DeadZone = DeadZone;
-                    Boolean.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".Inverted"),
-                        out Device.Axis[i].Inverted);
+                        Device.Axis[i].DeadZone = Device.DeadZone;
+                    // A slider's deadzone is special and needs to be handled separately
+                    if (!AltDirectInputDevice.AxisList[i, 0].StartsWith("Slider"))
+                        Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i, 0]).DeadZone = Device.Axis[i].DeadZone;
+                    ParseInverted(Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Inverted);
                     Device.Axis[i].isAvailable = (Device.Axis[i].Range.FloatRange != 0.0f);
                     if (!Device.Axis[i].isAvailable)
                         print("Altinput: WARNING - Axis " + AltDirectInputDevice.AxisList[i, 1] +
                             " was disabled because its range is zero.");
-
                 }
-                catch (Exception)
+                // SharpDX.SharpDXException: HRESULT: [0x80070002], Module: [SharpDX.DirectInput], ApiCode: [DIERR_NOTFOUND/NotFound], Message: The system cannot find the file specified.
+                catch (SharpDX.SharpDXException ex)
                 {
-                    Device.Axis[i].isAvailable = false;
+                    if (ex.ResultCode == 0x80070002)
+                        Device.Axis[i].isAvailable = false;
+                    else
+                        throw ex;
                 }
 #if (DEBUG)
-                print("Altinput: Axis #" + (i + 1) + ": isPresent = " + Device.Axis[i].isAvailable +
-                    ", Mapping = " + Device.Axis[i].Mapping +
-                    ", DeadZone = " + DeadZone +
-                    ", Inverted = " + Device.Axis[i].Inverted +
-                    ", RangeMin = " + Device.Axis[i].Range.Minimum +
-                    ", RangeMax = " + Device.Axis[i].Range.Maximum);
+                if (Device.Axis[i].isAvailable)
+                {
+                    String Mappings = "", Inverted = "";
+                    for (var m = 0; m < NumGameModes; m++)
+                    {
+                        Mappings += ", Mapping[" + GameModeName[m] + "] = '" + Device.Axis[i].Mapping[m] + "'";
+                        Inverted += ", Inverted[" + GameModeName[m] + "] = " + Device.Axis[i].Inverted[m];
+                    }
+                    print("Altinput: Axis #" + (i + 1) + ": Range [" + Device.Axis[i].Range.Minimum + ", " +
+                        Device.Axis[i].Range.Maximum + "], DeadZone = " + Device.Axis[i].DeadZone +
+                        Mappings + Inverted);
+                }
 #endif
             }
 
             // Process the POV controls
-            for (var i = 1; i <= Device.Joystick.Capabilities.PovCount; i++)
+            for (var i = 0; i < Device.Joystick.Capabilities.PovCount; i++)
             {
-                ParseButton(ref Device.Pov[i-1].Up, ini.IniReadValue(Section, "POV" + i + ".Up"));
-                ParseButton(ref Device.Pov[i-1].Down, ini.IniReadValue(Section, "POV" + i + ".Down"));
-                ParseButton(ref Device.Pov[i-1].Left, ini.IniReadValue(Section, "POV" + i + ".Left"));
-                ParseButton(ref Device.Pov[i-1].Right, ini.IniReadValue(Section, "POV" + i + ".Right"));
+                for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
+                    ParseButton(Section, "POV" + (i+1) + "." + AltDirectInputDevice.POVPositionName[j], ref Device.Pov[i].Button[j]);
 #if (DEBUG)
-                print("Altinput: POV #" + i + ": Up = " + Device.Pov[i-1].Up.Mapping + ", Value = " + Device.Pov[i-1].Up.Value +
-                    ", Down = " + Device.Pov[i-1].Down.Mapping + ", Value = " + Device.Pov[i-1].Down.Value +
-                    ", Left = " + Device.Pov[i-1].Left.Mapping + ", Value = " + Device.Pov[i-1].Left.Value +
-                    ", Right = " + Device.Pov[i-1].Right.Mapping + ", Value = " + Device.Pov[i-1].Right.Value);
+                for (var m = 0; m < NumGameModes; m++)
+                {
+                    String Mappings = "";
+                    for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
+                        Mappings += ((j != 0)?", ":"") + AltDirectInputDevice.POVPositionName[j] + " = " + Device.Pov[i].Button[j].Mapping[m] + ", Value = " + Device.Pov[i].Button[j].Value[m];
+                    print("Altinput: POV #" + (i + 1) + " [" + GameModeName[m] + "]: " + Mappings);
+                }
 #endif
             }
 
             // Process the buttons
-            for (var i = 1; i <= Device.Joystick.Capabilities.ButtonCount; i++)
+            for (var i = 0; i < Device.Joystick.Capabilities.ButtonCount; i++)
             {
-                ParseButton(ref Device.Button[i-1], ini.IniReadValue(Section, "Button" + i));
+                ParseButton(Section, "Button" + (i+1), ref Device.Button[i]);
 #if (DEBUG)
-                print("Altinput: Button #" + i + ": Mapping = " + Device.Button[i-1].Mapping +
-                    ", Value = " + Device.Button[i-1].Value);
+                String Mappings = "";
+                for (var m = 0; m < NumGameModes; m++)
+                    Mappings += ((m != 0)?", ":"") + "Mapping[" + GameModeName[m] + "] = '" + Device.Button[i].Mapping[m] +
+                        "', Value[" + GameModeName[m] + "] = " + Device.Button[i].Value[m];
+                print("Altinput: Button #" + (i+1) + ": " + Mappings);
 #endif
             }
 
         }
 
         /// <summary>
-        /// This method is the first called by the Unity engine when it instantiates
-        /// the game element it is associated to (here the main game menu)
+        /// Process each input section from the config file
         /// </summary>
-        void Awake()
+        void ParseInputs()
         {
-            // Try to match the devices we find with our config file
-            int NumDevices = 0;
             String InterfaceName, ClassName, DeviceName;
             AltDirectInputDevice Device;
             DeviceClass InstanceClass = DeviceClass.GameControl;
-            Boolean found;
-
-            Int32.TryParse(ini.IniReadValue("global", "NumDevices"), out NumDevices);
-            if (NumDevices == 0)
-                NumDevices = 4;
-            float.TryParse(ini.IniReadValue("global", "Threshold"), out Threshold);
 
             for (var i = 1; i <= NumDevices; i++)
             {
                 String InputName = "input" + i;
                 InterfaceName = ini.IniReadValue(InputName, "Interface");
-                if ((InterfaceName != "") && (InterfaceName != "DirectInput")) {
+                if ((InterfaceName == "") || (ini.IniReadValue(InputName, "Ignore") == "true"))
+                    continue;
+                if (InterfaceName != "DirectInput") {
                     print("AltInput[" + InputName + "]: Only 'DirectInput' is supported for Interface type");
-                } else {
-                    ClassName = ini.IniReadValue(InputName, "Class");
-                    if (ClassName == "")
-                        ClassName = "GameControl";
-                    else if (ClassName != "GameControl") {
-                        print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
-                        continue;   // ignore the device
-                    }
-                    // Overkill for now, but may come handy if we add support for other DirectInput devices
-                    foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
+                    continue;
+                }
+                ClassName = ini.IniReadValue(InputName, "Class");
+                if (ClassName == "")
+                    ClassName = "GameControl";
+                else if (ClassName != "GameControl") {
+                    print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
+                    continue;   // ignore the device
+                }
+                // Overkill for now, but may come handy if we add support for other DirectInput devices
+                foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
+                {
+                    if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
                     {
-                        if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
-                        {
-                            InstanceClass = Class;
-                            break;
-                        }
+                        InstanceClass = Class;
+                        break;
                     }
-                    DeviceName = ini.IniReadValue(InputName, "Name");
+                }
+                DeviceName = ini.IniReadValue(InputName, "Name");
 
-                    foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
-                    {
-                        if ((DeviceName == "") || (dev.InstanceName == DeviceName)) {
-                            found = false;
-                            foreach (var Instance in DeviceList) {
-                                if (Instance.InstanceGuid == dev.InstanceGuid) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (found)
-                                continue;
-                            // Only add this device if not already present in our list
-                            Device = new AltDirectInputDevice(directInput, InstanceClass, dev.InstanceGuid);
-                            SetAttributes(Device, InputName);
-                            DeviceList.Add(Device);
-                            print("AltInput: Added controller '" + dev.InstanceName + "'");
-                        }
+                foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
+                {
+                    if ((DeviceName == "") || (dev.InstanceName.StartsWith(DeviceName))) {
+                        // Only add this device if not already in our list
+                        if (DeviceList.Where(item => item.InstanceGuid == dev.InstanceGuid).Any())
+                            continue;
+                        Device = new AltDirectInputDevice(directInput, InstanceClass, dev.InstanceGuid);
+                        SetAttributes(Device, InputName);
+                        DeviceList.Add(Device);
+                        print("AltInput: Added controller '" + dev.InstanceName + "'");
                     }
                 }
             }
@@ -302,6 +384,15 @@ namespace AltInput
                 print("AltInput: No controller found");
                 return;
             }
+        }
+
+        /// <summary>
+        /// This method is the first called by the Unity engine when it instantiates
+        /// the game element it is associated to (here the main game menu)
+        /// </summary>
+        void Awake()
+        {
+            ParseInputs();
         }
 
     }
@@ -313,6 +404,7 @@ namespace AltInput
     public class ProcessInput : MonoBehaviour
     {
         private static FlightCtrlState UpdatedState = null;
+        private static readonly uint CurrentMode = (uint)Config.GameMode.Flight;
 
         /// <summary>
         /// Update a Flight Vessel axis control (including throttle) by name
@@ -345,8 +437,6 @@ namespace AltInput
                     break;
                 case "mainThrottle":
                     UpdatedState.mainThrottle = (value + 1.0f) / 2.0f;
-                    if (UpdatedState.mainThrottle < Config.Threshold)
-                        UpdatedState.mainThrottle = 0.0f;
                     break;
             }
         }
@@ -359,7 +449,7 @@ namespace AltInput
         private void UpdateButton(AltButton Button, Boolean Pressed)
         {
             // TODO: Something more elegant (possibly using reflection or HashTable)
-            switch (Button.Mapping)
+            switch (Button.Mapping[CurrentMode])
             {
                 case "yaw":
                 case "pitch":
@@ -368,7 +458,7 @@ namespace AltInput
                 case "Y":
                 case "Z":
                 case "mainThrottle":
-                    UpdateAxis(Button.Mapping, Pressed ? Button.Value : 0.0f);
+                    UpdateAxis(Button.Mapping[CurrentMode], Pressed ? Button.Value[CurrentMode] : 0.0f);
                     break;
                 case "ActivateNextStage":
                     if (Pressed)
@@ -414,87 +504,33 @@ namespace AltInput
                 case "KSPActionGroup.Custom09":
                 case "KSPActionGroup.Custom10":
                     int i;
-                    int.TryParse(Button.Mapping.Substring("KSPActionGroup.Custom##".Length), out i);
+                    int.TryParse(Button.Mapping[CurrentMode].Substring("KSPActionGroup.Custom##".Length), out i);
                     if (i > 0)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup((KSPActionGroup)(128 << i));
                     break;
             }
         }
 
-        private void UpdatePOV(AltPOV Pov, int Value)
+        private void UpdatePOV(AltPOV Pov, int Angle)
         {
-            // Value is an angle in degrees * 100, or -1 at rest.
-            // Now, since my POV has only 8 discrete positions, and I don't care that
-            // much about trying to sin'ing and cos'ing the angle to send a proportional
-            // axis value, I'm gonna use a plain old switch with hardcoded angles.
-            // If you're unhappy about this, you can send a patch!
-            switch (Value)
-            {
-                // Be mindful that, if you use an axis for say Left and Right, the
-                // "true" action(s) need to comes last, else you might end up setting
-                // your axis to 1.0, and then undoing it to 0.0 on false...
-                case 0: // Top
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Right, false);
-                    UpdateButton(Pov.Up, true);
-                    break;
-                case 4500: // Top-Right
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Up, true);
-                    UpdateButton(Pov.Right, true);
-                    break;
-                case 9000: // Right
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Right, true);
-                    break;
-                case 13500: // Down-Right
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Down, true);
-                    UpdateButton(Pov.Right, true);
-                    break;
-                case 18000: // Down
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Right, false);
-                    UpdateButton(Pov.Down, true);
-                    break;
-                case 22500: // Down-Left
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Right, false);
-                    UpdateButton(Pov.Down, true);
-                    UpdateButton(Pov.Left, true);
-                    break;
-                case 27000: // Left
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Right, false);
-                    UpdateButton(Pov.Left, true);
-                    break;
-                case 31500: // Up-Left
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Right, false);
-                    UpdateButton(Pov.Up, true);
-                    UpdateButton(Pov.Left, true);
-                    break;
-                default:    // Rest
-                    UpdateButton(Pov.Up, false);
-                    UpdateButton(Pov.Down, false);
-                    UpdateButton(Pov.Left, false);
-                    UpdateButton(Pov.Right, false);
-                    break;
-            }
+            // Angle in degrees * 100, or -1 at rest.
+            // Start by resetting all positions
+            for (var i = 0; i < AltDirectInputDevice.NumPOVPositions; i++)
+                UpdateButton(Pov.Button[i], false);
+            if (Angle < 0)
+                return;
+            Angle += 36000;
+            const int tolerance = 6000; // +/- 60 degrees
+            // If our value is less than tolerance degrees apart from a position, we activate it
+            UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4], true);
+            UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4], true);
         }
 
         /// <summary>
         /// Update the current state of the spacecraft according to all inputs
         /// </summary>
         /// <param name="CurrentState">The current flight control state</param>
-        private void UpdateState(ref FlightCtrlState CurrentState)
+        private void UpdateState(FlightCtrlState CurrentState)
         {
             if (Math.Abs(CurrentState.yaw) < Math.Abs(UpdatedState.yaw))
                 CurrentState.yaw = UpdatedState.yaw;
@@ -512,10 +548,11 @@ namespace AltInput
                 CurrentState.mainThrottle = UpdatedState.mainThrottle;
 
             // If SAS is on, we need to override it or else our changes are ignored
-            Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > Config.Threshold) ||
-                                  (Math.Abs(CurrentState.yaw) > Config.Threshold) || 
-                                  (Math.Abs(CurrentState.roll) > Config.Threshold);
-            FlightGlobals.ActiveVessel.vesselSAS.ManualOverride(overrideSAS);
+            VesselSAS VesselSAS = FlightGlobals.ActiveVessel.vesselSAS;
+            Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > VesselSAS.controlDetectionThreshold) ||
+                                  (Math.Abs(CurrentState.yaw) > VesselSAS.controlDetectionThreshold) ||
+                                  (Math.Abs(CurrentState.roll) > VesselSAS.controlDetectionThreshold);
+            VesselSAS.ManualOverride(overrideSAS);
         }
 
         /// <summary>
@@ -564,18 +601,28 @@ namespace AltInput
                         }
                         else for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
                         {
-                            if ((!Device.Axis[i].isAvailable) || (String.IsNullOrEmpty(Device.Axis[i].Mapping)))
+                            if ((!Device.Axis[i].isAvailable) || (String.IsNullOrEmpty(Device.Axis[i].Mapping[CurrentMode])))
                                 continue;
                             if (OffsetName == AltDirectInputDevice.AxisList[i,0])
                             {
-                                float value = ((state.Value - Device.Axis[i].Range.Minimum) / (0.5f * Device.Axis[i].Range.FloatRange)) - 1.0f;
-                                if (Device.Axis[i].Inverted)
+                                float value = ((state.Value - Device.Axis[i].Range.Minimum) /
+                                    (0.5f * Device.Axis[i].Range.FloatRange)) - 1.0f;
+                                if (Device.Axis[i].Inverted[CurrentMode])
                                     value = -value;
-                                UpdateAxis(Device.Axis[i].Mapping, value);
+                                // We need to handle a slider's deadzone ourselves, as it applies to
+                                // the edges rather than the center
+                                if (OffsetName.StartsWith("Slider"))
+                                {
+                                    if (value < ((-10000.0f + Device.Axis[i].DeadZone) / 10000.0f))
+                                        value = -1.0f;
+                                    if (value > ((10000.0f - Device.Axis[i].DeadZone) / 10000.0f))
+                                        value = 1.0f;
+                                }
+                                UpdateAxis(Device.Axis[i].Mapping[CurrentMode], value);
                             }
                         }
                     }
-                    UpdateState(ref CurrentState);
+                    UpdateState(CurrentState);
                 }
             }
         }
@@ -607,6 +654,19 @@ namespace AltInput
             if (ActiveVessel != null)
                 ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
         }
+
+        void OnDestroy()
+        {
+#if (DEBUG)
+            print("AltInput: ProcessInput.OnDestroy()");
+#endif
+            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
+            if (ActiveVessel != null)
+                ActiveVessel.OnFlyByWire -= new FlightInputCallback(ControllerInput);
+            foreach (var Device in Config.DeviceList)
+                Device.Joystick.Unacquire();
+        }
+
     }
 
 }

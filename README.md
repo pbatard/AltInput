@@ -46,8 +46,8 @@ Configuration
 
 All configuration is done in `PluginData\AltInput\config.ini`
 
-__As of version 0.4__, the following DirectInput controls, if present, can be assigned
-to Vessel Control. These are the names you should use for `Control` when adding a
+The following DirectInput controls, if present, can be assigned to Vessel Control.
+These are the names you should use for `Control` when adding a 
 `Control = Mapping` line in your config file:
 * `X`
 * `Y`
@@ -59,21 +59,7 @@ to Vessel Control. These are the names you should use for `Control` when adding 
 * `Button[1-128]`
 * `POV[1-4]`
 
-The following DirectInput controls are not handled:
-* `VelocityX`
-* `VelocityY`
-* `VelocityZ`
-* `AngularVelocityX`
-* `AngularVelocityY`
-* `AngularVelocityZ`
-* `VelocitySlider[1-2]`
-* `AccelerationX`
-* `AccelerationY`
-* `AccelerationZ`
-* `AngularAccelerationX`
-* `AngularAccelerationY`
-* `AngularAccelerationZ`
-* `AccelerationSlider[1-2]`
+Anything that isn't in the list above is not handled.
 
 The following KSP controls can be mapped to an input. These are the names you should
 use for `Mapping` when adding a `Control = Mapping` line in your config file:
@@ -94,19 +80,7 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `KSPActionGroup.Abort`
 * `KSPActionGroup.Custom[01-10]`
 
-And the following are not handled yet:
-* `fastThrottle`
-* `gearDown`
-* `gearUp`
-* `headlight`
-* `killRot`
-* `yawTrim`
-* `pitchTrim`
-* `rollTrim`
-* `wheelSteer`
-* `wheelSteerTrim`
-* `wheelThrottle`
-* `wheelThrottleTrim`
+Anything that isn't in the list above is not handled.
 
 
 How do I find the names I should use for my controls?
