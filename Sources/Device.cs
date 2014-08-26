@@ -25,6 +25,6 @@ namespace AltInput
     {
         abstract public void OpenDevice();
         abstract public void CloseDevice();
-        abstract public void ProcessInput(GameState gs);
+        abstract public void ProcessInput();
     }
 }

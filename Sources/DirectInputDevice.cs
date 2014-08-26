@@ -124,8 +124,8 @@ namespace AltInput
             this.Axis = new AltAxis[AltDirectInputDevice.AxisList.GetLength(0)];
             for (var i = 0; i < this.Axis.Length; i++)
             {
-                this.Axis[i].Mapping = new String[Config.NumGameModes];
-                this.Axis[i].Inverted = new Boolean[Config.NumGameModes];
+                this.Axis[i].Mapping = new String[GameState.NumModes];
+                this.Axis[i].Inverted = new Boolean[GameState.NumModes];
             }
             this.Pov = new AltPOV[this.Joystick.Capabilities.PovCount];
 
@@ -134,19 +134,19 @@ namespace AltInput
                 this.Pov[i].Button = new AltButton[NumPOVPositions];
                 for (var j = 0; j < NumPOVPositions; j++)
                 {
-                    this.Pov[i].Button[j].Mapping = new String[Config.NumGameModes];
-                    this.Pov[i].Button[j].Value = new float[Config.NumGameModes];
+                    this.Pov[i].Button[j].Mapping = new String[GameState.NumModes];
+                    this.Pov[i].Button[j].Value = new float[GameState.NumModes];
                 }
             }
             this.Button = new AltButton[this.Joystick.Capabilities.ButtonCount];
             for (var i = 0; i < this.Button.Length; i++)
             {
-                this.Button[i].Mapping = new String[Config.NumGameModes];
-                this.Button[i].Value = new float[Config.NumGameModes];
+                this.Button[i].Mapping = new String[GameState.NumModes];
+                this.Button[i].Value = new float[GameState.NumModes];
             }
         }
 
-        public override void ProcessInput(GameState gs)
+        public override void ProcessInput()
         {
             Joystick.Poll();
             var data = Joystick.GetBufferedData();
@@ -158,16 +158,16 @@ namespace AltInput
                     // This call should always succeed
                     uint i = uint.Parse(OffsetName.Substring("Buttons".Length));
                     // For now we consider that a non zero value means the button is pressed
-                    gs.UpdateButton(Button[i], (state.Value != 0));
+                    GameState.UpdateButton(Button[i], (state.Value != 0));
                 }
                 else if (OffsetName.StartsWith("PointOf"))
                 {
                     uint i = uint.Parse(OffsetName.Substring("PointOfViewControllers".Length));
-                    gs.UpdatePOV(Pov[i], state.Value);
+                    GameState.UpdatePOV(Pov[i], state.Value);
                 }
                 else for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
                 {
-                    uint CurrentMode = (uint)gs.GetGameMode();
+                    uint CurrentMode = (uint)GameState.CurrentMode;
                     if ((!Axis[i].isAvailable) || (String.IsNullOrEmpty(Axis[i].Mapping[CurrentMode])))
                         continue;
                     if (OffsetName == AltDirectInputDevice.AxisList[i,0])
@@ -185,7 +185,7 @@ namespace AltInput
                             if (value > ((10000.0f - Axis[i].DeadZone) / 10000.0f))
                                 value = 1.0f;
                         }
-                        gs.UpdateAxis(Axis[i].Mapping[CurrentMode], value);
+                        GameState.UpdateFlightAxis(Axis[i].Mapping[CurrentMode], value, false);
                     }
                 }
             }
@@ -196,10 +196,9 @@ namespace AltInput
             // Device may have been already acquired - release it
             Joystick.Unacquire();
             ScreenMessages.PostScreenMessage("AltInput: Using Controller '" +
-                Joystick.Information.InstanceName + "' (Axes: " +
-                Joystick.Capabilities.AxeCount + ", Buttons: " +
-                Joystick.Capabilities.ButtonCount + ", POVs: " +
-                Joystick.Capabilities.PovCount + ")", 10f, ScreenMessageStyle.UPPER_LEFT);
+                Joystick.Information.InstanceName + "': " + Joystick.Capabilities.AxeCount + " Axes, " +
+                Joystick.Capabilities.ButtonCount + " Buttons, " + Joystick.Capabilities.PovCount +
+                 " POV(s)", 10f, ScreenMessageStyle.UPPER_LEFT);
             // Set BufferSize in order to use buffered data.
             Joystick.Properties.BufferSize = 128;
             Joystick.Acquire();

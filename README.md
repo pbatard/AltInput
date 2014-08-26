@@ -49,9 +49,9 @@ All configuration is done in `PluginData\AltInput\config.ini`
 The following DirectInput controls, if present, can be assigned to Vessel Control.
 These are the names you should use for `Control` when adding a 
 `Control = Mapping` line in your config file:
-* `X`
-* `Y`
-* `Z`
+* `AxisX`
+* `AxisY`
+* `AxisZ`
 * `RotationX`
 * `RotationY`
 * `RotationZ`
@@ -67,18 +67,29 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `pitch`
 * `roll`
 * `mainThrottle`
-* `X`
-* `Y`
-* `Z`
-* `ActivateNextStage`
-* `KSPActionGroup.Stage`
-* `KSPActionGroup.Gear`
-* `KSPActionGroup.Light`
-* `KSPActionGroup.RCS`
-* `KSPActionGroup.SAS`
-* `KSPActionGroup.Brakes`
-* `KSPActionGroup.Abort`
-* `KSPActionGroup.Custom[01-10]`
+* `wheelSteer`
+* `wheelThrottle`
+* `X` - Translation X
+* `Y` - Translation Y
+* `Z` - Translation Z
+* `toggleAbort`
+* `activateLanded` - switch from 'Flight' to 'Landed' input modes
+* `activateFlight` - switch from 'Landed' to 'Flight' input modes
+   __NB:__ If you map both of the above to the same button, you can effectively 
+   toggle between 'Flight' and 'Landed' modes.
+* `activateBrakes`
+* `toggleBrakes`
+* `activateCustom[01-10]`
+* `toggleCustom[01-10]`
+* `toggleGears`
+* `toggleLights`
+* `overrideRCS`
+* `toggleRCS`
+* `overrideSAS`
+* `toggleSAS`
+* `activateStaging`
+* `switchView` - Switch camera view (auto/free/orbital/chase)
+* `toggleMapView` - Switch between Map view and Staging/Docking view
 
 Anything that isn't in the list above is not handled.
 

@@ -19,61 +19,57 @@
  */
 
 using System;
+using System.Reflection;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.IO;
 
 using UnityEngine;
 using KSP.IO;
 
 namespace AltInput
 {
-    public class GameState
+    public class GameState : MonoBehaviour
     {
-        private static FlightCtrlState UpdatedState = null;
-        private static Config.GameMode CurrentMode = Config.GameMode.Flight;
-
-        public GameState(FlightCtrlState CurrentState)
+        /// <summary>The game modes we support</summary>
+        public enum Mode
         {
-            UpdatedState = new FlightCtrlState();
-            UpdatedState.CopyFrom(CurrentState);
-        }
+            Flight = 0,
+            Landed,
+            EVA
+        };
+        public readonly static String[] ModeName = Enum.GetNames(typeof(Mode));
+        public readonly static int NumModes = ModeName.Length;
 
-        public Config.GameMode GetGameMode()
-        {
-            return CurrentMode;
-        }
+        public static FlightCtrlState UpdatedState = null;
+        public static Mode CurrentMode = Mode.Flight;
+        // Build a static list of all FlightCtrlState attributes that are of type float
+        // and don't contain "Trim" in their name. These are the axes we will handle.
+        public readonly static FieldInfo[] AxisFields =
+            typeof(FlightCtrlState).GetFields().Where(item =>
+                (item.FieldType == typeof(float)) && (!item.Name.Contains("Trim"))).ToArray();
+
+        private static KerbalEVA Eva = null;
 
         /// <summary>
         /// Update a Flight Vessel axis control (including throttle) by name
         /// </summary>
-        /// <param name="Name">The name of the axis to update</param>
+        /// <param name="AxisName">The name of the axis to update</param>
         /// <param name="value">The value to set</param>
-        public void UpdateAxis(String Name, float value)
+        public static void UpdateFlightAxis(String AxisName, float value, Boolean isDelta)
         {
-            // TODO: Something more elegant (possibly using reflection or HashTable)
-            switch (Name)
-            {
-                // TODO: Add the other supported axes such as wheelSteer
-                case "yaw":
-                    UpdatedState.yaw = value;
-                    break;
-                case "pitch":
-                    UpdatedState.pitch = value;
-                    break;
-                case "roll":
-                    UpdatedState.roll = value;
-                    break;
-                case "X":
-                    UpdatedState.X = value;
-                    break;
-                case "Y":
-                    UpdatedState.Y = value;
-                    break;
-                case "Z":
-                    UpdatedState.Z = value;
-                    break;
-                case "mainThrottle":
-                    UpdatedState.mainThrottle = (value + 1.0f) / 2.0f;
-                    break;
-            }
+            FieldInfo field = typeof(FlightCtrlState).GetField(AxisName);
+            Boolean isThrottle = AxisName.EndsWith("Throttle");
+
+            if (isDelta)
+                value += (float)field.GetValue(UpdatedState);
+            else if (isThrottle)
+                value = (value + 1.0f) / 2.0f;
+                
+            value = Mathf.Clamp(value, isThrottle?0.0f:-1.0f, +1.0f);
+
+            field.SetValue(UpdatedState, value);
         }
 
         /// <summary>
@@ -81,72 +77,138 @@ namespace AltInput
         /// </summary>
         /// <param name="Name">The name of the axis to update</param>
         /// <param name="value">The value to set</param>
-        public void UpdateButton(AltButton Button, Boolean Pressed)
+        public static void UpdateButton(AltButton Button, Boolean isPressed)
         {
-            // TODO: Something more elegant (possibly using reflection or HashTable)
-            switch (Button.Mapping[(uint)CurrentMode])
+            int i;
+
+            String Mapping = Button.Mapping[(uint)CurrentMode];
+            if (Mapping == null)
+                return;
+
+            // Check if we have a delta rather than an absolute value
+            Boolean isDelta = (Mapping.EndsWith(".Delta"));
+            if (isDelta)
+                Mapping = Mapping.Split('.')[0];
+
+            // Check if our mapping is a FlightCtrlState axis
+            if (AxisFields.Where(item => item.Name == Mapping).Any())
+                UpdateFlightAxis(Mapping, isPressed ? Button.Value[(uint)CurrentMode] : 0.0f, isDelta);
+
+            // TODO: Something more elegant (possibly using reflection and a class with all these attributes)
+            switch (Mapping)
             {
-                case "yaw":
-                case "pitch":
-                case "roll":
-                case "X":
-                case "Y":
-                case "Z":
-                case "mainThrottle":
-                    UpdateAxis(Button.Mapping[(uint)CurrentMode], Pressed ? Button.Value[(uint)CurrentMode] : 0.0f);
+                case "activateLanded":
+                    if (isPressed && (CurrentMode == Mode.Flight))
+                    {
+                        if (FlightGlobals.ActiveVessel.LandedOrSplashed)
+                        {
+                            CurrentMode = Mode.Landed;
+                            ScreenMessages.PostScreenMessage("Landed mode",
+                                5f, ScreenMessageStyle.UPPER_CENTER);
+                        }
+                        else
+                        {
+                            ScreenMessages.PostScreenMessage("Vessel is not on the ground!", 
+                                5f, ScreenMessageStyle.UPPER_CENTER);
+                        }
+                    }
                     break;
-                case "ActivateNextStage":
-                    if (Pressed)
+                case "activateFlight":
+                    if (isPressed && (CurrentMode == Mode.Landed))
+                    {
+                        CurrentMode = Mode.Flight;
+                        ScreenMessages.PostScreenMessage("Flight mode",
+                                5f, ScreenMessageStyle.UPPER_CENTER);
+                    }
+                    break;
+                case "toggleJetpack":
+                    if (isPressed && (CurrentMode == Mode.EVA))
+                        Eva.JetpackDeployed = !Eva.JetpackDeployed;
+                    break;
+                case "switchView":
+                    if (isPressed)
+                    {
+                        FlightCamera fc = FlightCamera.fetch;
+                        fc.SetNextMode();
+                    }
+                    break;
+                case "toggleMapView":
+                    if (isPressed)
+                    {
+                        if (MapView.MapIsEnabled)
+                            MapView.ExitMapView();
+                        else
+                            MapView.EnterMapView();
+                    }
+                    break;
+                case "activateStaging":
+                    if (isPressed)
                         Staging.ActivateNextStage();
                     break;
-                case "KSPActionGroup.Stage":
-                    // What does this do???
-                    if (Pressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Stage);
-                    break;
-                case "KSPActionGroup.Gear":
-                    if (Pressed)
+                case "toggleGears":
+                    if (isPressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Gear);
                     break;
-                case "KSPActionGroup.Light":
-                    if (Pressed)
+                case "toggleLights":
+                    if (isPressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Light);
                     break;
-                case "KSPActionGroup.RCS":
-                    if (Pressed)
+                case "overrideRCS":
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
+                    break;
+                case "toggleRCS":
+                    if (isPressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
                     break;
-                case "KSPActionGroup.SAS":
-                    if (Pressed)
+                case "overrideSAS":
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
+                    break;
+                case "toggleSAS":
+                    if (isPressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
                     break;
-                case "KSPActionGroup.Brakes":
-                    if (Pressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
-                    break;
-                case "KSPActionGroup.Abort":
-                    if (Pressed)
+                case "toggleAbort":
+                    if (isPressed)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Abort);
                     break;
-                case "KSPActionGroup.Custom01":
-                case "KSPActionGroup.Custom02":
-                case "KSPActionGroup.Custom03":
-                case "KSPActionGroup.Custom04":
-                case "KSPActionGroup.Custom05":
-                case "KSPActionGroup.Custom06":
-                case "KSPActionGroup.Custom07":
-                case "KSPActionGroup.Custom08":
-                case "KSPActionGroup.Custom09":
-                case "KSPActionGroup.Custom10":
-                    int i;
-                    int.TryParse(Button.Mapping[(uint)CurrentMode].Substring("KSPActionGroup.Custom##".Length), out i);
+                case "activateBrakes":
+                    FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, isPressed);
+                    break;
+                case "toggleBrakes":
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
+                    break;
+                case "toggleCustom01":
+                case "toggleCustom02":
+                case "toggleCustom03":
+                case "toggleCustom04":
+                case "toggleCustom05":
+                case "toggleCustom06":
+                case "toggleCustom07":
+                case "toggleCustom08":
+                case "toggleCustom09":
+                case "toggleCustom10":
+                    int.TryParse(Mapping.Substring("toggleCustom##".Length), out i);
                     if (i > 0)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup((KSPActionGroup)(128 << i));
+                    break;
+                case "activateCustom01":
+                case "activateCustom02":
+                case "activateCustom03":
+                case "activateCustom04":
+                case "activateCustom05":
+                case "activateCustom06":
+                case "activateCustom07":
+                case "activateCustom08":
+                case "activateCustom09":
+                case "activateCustom10":
+                    int.TryParse(Mapping.Substring("activateCustom##".Length), out i);
+                    if (i > 0)
+                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup((KSPActionGroup)(128 << i), isPressed);
                     break;
             }
         }
 
-        public void UpdatePOV(AltPOV Pov, int Angle)
+        public static void UpdatePOV(AltPOV Pov, int Angle)
         {
             // Angle in degrees * 100, or -1 at rest.
             // Start by resetting all positions
@@ -161,26 +223,32 @@ namespace AltInput
             UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4], true);
         }
 
+        public static void UpdateMode()
+        {
+            if (FlightGlobals.ActiveVessel.isEVA)
+            {
+                if (GameState.CurrentMode != GameState.Mode.EVA)
+                    GameState.CurrentMode = GameState.Mode.EVA;
+                Eva = FlightGlobals.ActiveVessel.rootPart.gameObject.GetComponent<KerbalEVA>();
+            }
+            else if (Eva != null)
+            {
+                Eva = null;
+            }
+        }
+
         /// <summary>
         /// Update the current state of the spacecraft according to all inputs
         /// </summary>
         /// <param name="CurrentState">The current flight control state</param>
-        public void UpdateState(FlightCtrlState CurrentState)
+        public static void UpdateState(FlightCtrlState CurrentState)
         {
-            if (Math.Abs(CurrentState.yaw) < Math.Abs(UpdatedState.yaw))
-                CurrentState.yaw = UpdatedState.yaw;
-            if (Math.Abs(CurrentState.pitch) < Math.Abs(UpdatedState.pitch))
-                CurrentState.pitch = UpdatedState.pitch;
-            if (Math.Abs(CurrentState.roll) < Math.Abs(UpdatedState.roll))
-                CurrentState.roll = UpdatedState.roll;
-            if (Math.Abs(CurrentState.X) < Math.Abs(UpdatedState.X))
-                CurrentState.X = UpdatedState.X;
-            if (Math.Abs(CurrentState.Y) < Math.Abs(UpdatedState.Y))
-                CurrentState.Y = UpdatedState.Y;
-            if (Math.Abs(CurrentState.Z) < Math.Abs(UpdatedState.Z))
-                CurrentState.Z = UpdatedState.Z;
-            if (CurrentState.mainThrottle < UpdatedState.mainThrottle)
-                CurrentState.mainThrottle = UpdatedState.mainThrottle;
+            // Go through all our axes to find the ones we need to update
+            foreach (FieldInfo field in AxisFields)
+            {
+                if (Math.Abs((float)field.GetValue(CurrentState)) < Math.Abs((float)field.GetValue(UpdatedState)))
+                    field.SetValue(CurrentState, (float)field.GetValue(UpdatedState));
+            }
 
             // If SAS is on, we need to override it or else our changes are ignored
             VesselSAS VesselSAS = FlightGlobals.ActiveVessel.vesselSAS;

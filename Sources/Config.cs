@@ -38,41 +38,23 @@ namespace AltInput
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
-        /// <summary>The game modes we support</summary>
-        public enum GameMode
-        {
-            Flight = 0,
-            EVA,
-            Rover
-        };
-        public readonly static String[] GameModeName = Enum.GetNames(typeof(GameMode));
-        public readonly static int NumGameModes = GameModeName.Length;
-
         /// <summary>The maximum number of device instances that can be present in a config file</summary>
         private readonly uint NumDevices = 128;
-        /// <summary>The KSP axes we support</summary>
-        public readonly String[] KSPAxisList = { "yaw", "pitch", "roll", "X", "Y", "Z", "mainThrottle" };
-        /// <summary>The KSP actions we support</summary>
-        public readonly String[] KSPActionList = { "ActivateNextStage", "KSPActionGroup.Stage", "KSPActionGroup.Gear",
-            "KSPActionGroup.Light", "KSPActionGroup.RCS", "KSPActionGroup.SAS", "KSPActionGroup.Brakes",
-            "KSPActionGroup.Abort", "KSPActionGroup.Custom01", "KSPActionGroup.Custom02", "KSPActionGroup.Custom03",
-            "KSPActionGroup.Custom04", "KSPActionGroup.Custom05", "KSPActionGroup.Custom06", "KSPActionGroup.Custom07",
-            "KSPActionGroup.Custom08", "KSPActionGroup.Custom09", "KSPActionGroup.Custom10" };
         // Good developers do NOT let end-users fiddle with XML configuration files...
         private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
             @"\Plugins\PluginData\AltInput\config.ini");
         private DirectInput directInput = new DirectInput();
-        private static readonly String[] Separators = { "[", "]", " ", "\t" };
+        private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
 
         private void ParseButton(String Section, String Name, ref AltButton Button)
         {
-            for (var m = 0; m < NumGameModes; m++)
+            for (var m = 0; m < GameState.NumModes; m++)
             {
                 // Try to read from the common section first
                 var ConfigData = ini.IniReadValue(Section, Name);
                 // Then check for an override
-                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name);
+                var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name);
                 if (Override != "")
                     ConfigData = Override;
                 try
@@ -87,12 +69,12 @@ namespace AltInput
 
         private void ParseMapping(String Section, String Name, ref String[] Mapping)
         {
-            for (var m = 0; m < NumGameModes; m++)
+            for (var m = 0; m < GameState.NumModes; m++)
             {
                 // Try to read a mapping from the common section first
                 Mapping[m] = ini.IniReadValue(Section, Name);
                 // Then check for an override
-                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name);
+                var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name);
                 if (Override != "")
                     Mapping[m] = Override;
             }
@@ -100,12 +82,12 @@ namespace AltInput
 
         private void ParseInverted(String Section, String Name, ref Boolean[] Inverted)
         {
-            for (var m = 0; m < NumGameModes; m++)
+            for (var m = 0; m < GameState.NumModes; m++)
             {
                 // Try to read the inverted attribute from the common section first
                 Boolean.TryParse(ini.IniReadValue(Section, Name + ".Inverted"), out Inverted[m]);
                 // Then check for an override
-                var Override = ini.IniReadValue(Section + "." + GameModeName[m], Name + ".Inverted");
+                var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name + ".Inverted");
                 if (Override != "")
                     Boolean.TryParse(Override, out Inverted[m]);
             }
@@ -161,10 +143,10 @@ namespace AltInput
                 if (Device.Axis[i].isAvailable)
                 {
                     String Mappings = "", Inverted = "";
-                    for (var m = 0; m < NumGameModes; m++)
+                    for (var m = 0; m < GameState.NumModes; m++)
                     {
-                        Mappings += ", Mapping[" + GameModeName[m] + "] = '" + Device.Axis[i].Mapping[m] + "'";
-                        Inverted += ", Inverted[" + GameModeName[m] + "] = " + Device.Axis[i].Inverted[m];
+                        Mappings += ", Mapping[" + GameState.ModeName[m] + "] = '" + Device.Axis[i].Mapping[m] + "'";
+                        Inverted += ", Inverted[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Inverted[m];
                     }
                     print("Altinput: Axis #" + (i + 1) + ": Range [" + Device.Axis[i].Range.Minimum + ", " +
                         Device.Axis[i].Range.Maximum + "], DeadZone = " + Device.Axis[i].DeadZone +
@@ -179,12 +161,12 @@ namespace AltInput
                 for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
                     ParseButton(Section, "POV" + (i + 1) + "." + AltDirectInputDevice.POVPositionName[j], ref Device.Pov[i].Button[j]);
 #if (DEBUG)
-                for (var m = 0; m < NumGameModes; m++)
+                for (var m = 0; m < GameState.NumModes; m++)
                 {
                     String Mappings = "";
                     for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
                         Mappings += ((j != 0) ? ", " : "") + AltDirectInputDevice.POVPositionName[j] + " = " + Device.Pov[i].Button[j].Mapping[m] + ", Value = " + Device.Pov[i].Button[j].Value[m];
-                    print("Altinput: POV #" + (i + 1) + " [" + GameModeName[m] + "]: " + Mappings);
+                    print("Altinput: POV #" + (i + 1) + " [" + GameState.ModeName[m] + "]: " + Mappings);
                 }
 #endif
             }
@@ -195,9 +177,9 @@ namespace AltInput
                 ParseButton(Section, "Button" + (i + 1), ref Device.Button[i]);
 #if (DEBUG)
                 String Mappings = "";
-                for (var m = 0; m < NumGameModes; m++)
-                    Mappings += ((m != 0) ? ", " : "") + "Mapping[" + GameModeName[m] + "] = '" + Device.Button[i].Mapping[m] +
-                        "', Value[" + GameModeName[m] + "] = " + Device.Button[i].Value[m];
+                for (var m = 0; m < GameState.NumModes; m++)
+                    Mappings += ((m != 0) ? ", " : "") + "Mapping[" + GameState.ModeName[m] + "] = '" + Device.Button[i].Mapping[m] +
+                        "', Value[" + GameState.ModeName[m] + "] = " + Device.Button[i].Value[m];
                 print("Altinput: Button #" + (i + 1) + ": " + Mappings);
 #endif
             }

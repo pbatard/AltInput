@@ -34,8 +34,6 @@ namespace AltInput
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class ProcessInput : MonoBehaviour
     {
-        private GameState gs = null;
-
         /// <summary>
         /// Update the flight control state according to our inputs
         /// </summary>
@@ -45,19 +43,26 @@ namespace AltInput
             // Does this ever occur?
             if (FlightGlobals.ActiveVessel == null)
             {
-                gs = null;
+                print("FlightGlobals.ActiveVessel == null");
+                GameState.UpdatedState = null;
                 // No need to do anything
                 return;
             }
             if (Config.DeviceList.Count != 0)
             {
-                if (gs == null)
-                    gs = new GameState(CurrentState);
-                foreach (var Device in Config.DeviceList)
+                if (GameState.UpdatedState == null)
                 {
-                    Device.ProcessInput(gs);
-                    gs.UpdateState(CurrentState);
+                    GameState.UpdatedState = new FlightCtrlState();
+                    GameState.UpdatedState.CopyFrom(CurrentState);
+                    GameState.CurrentMode = GameState.Mode.Flight;
                 }
+
+                GameState.UpdateMode();
+
+                foreach (var Device in Config.DeviceList)
+                    Device.ProcessInput();
+
+                GameState.UpdateState(CurrentState);
             }
         }
 
@@ -70,7 +75,7 @@ namespace AltInput
             foreach (var Device in Config.DeviceList)
                 Device.OpenDevice();
             if (Config.DeviceList.Count == 0)
-                ScreenMessages.PostScreenMessage("AltInput: No controller detected", 10f,
+                ScreenMessages.PostScreenMessage("AltInput: No controller detected", 5f,
                     ScreenMessageStyle.UPPER_LEFT);
             // Add our handler
             Vessel ActiveVessel = FlightGlobals.ActiveVessel;
@@ -83,9 +88,9 @@ namespace AltInput
 #if (DEBUG)
             print("AltInput: ProcessInput.OnDestroy()");
 #endif
-            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
-            if (ActiveVessel != null)
-                ActiveVessel.OnFlyByWire -= new FlightInputCallback(ControllerInput);
+//            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
+//            if (ActiveVessel != null)
+//                ActiveVessel.OnFlyByWire -= new FlightInputCallback(ControllerInput);
             foreach (var Device in Config.DeviceList)
                 Device.CloseDevice();
         }

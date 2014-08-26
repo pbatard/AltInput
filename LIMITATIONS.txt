@@ -1,20 +1,18 @@
 Below are the current limitations of AltInput.
 
-Because my development time is limited, I am not planning to work on removing
-these limitations.
-
-Of course, you are very welcome to send a patch if you want to tackle them.
+Since my development time is limited, I currently have no plans to remove the
+following limitations (but you are welcome to send a patch if you want to
+address them!)
 
 * Windows ONLY:
-- Relies on SharpDX which is Windows only
-- Relies on WritePrivateProfileString/GetPrivateProfileString kernel32.dll APIs
+- Relies on SharpDX, which is a Windows only library
+- Relies on WritePrivateProfileString/GetPrivateProfileString, which are
+  Windows kernel32.dll APIs
 
-* Device must be a DirectInput controller. Other methods of querying input are
-  not supported.
+* Device must be a DirectInput controller. 
+  Other methods of querying input are not supported.
 
-* Device must belong to the DirectInput GameControl class. Other DirectInput
-  devices are not supported.
-
-* Camera control, cycling through ships, switch view and so on are not supported
+* Device must belong to DirectInput 'GameControl class. 
+  Other DirectInput devices are not supported.
 
 * No UI to assign the controls - everything must be set through the ini file.
