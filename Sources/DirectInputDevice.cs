@@ -52,6 +52,8 @@ namespace AltInput
         /// indicates that the entire physical range of the axis is dead. For regular
         /// axes, the dead zone applies to the center or, for sliders, to the edges</summary>
         public int DeadZone;
+        /// <summary>factor by which to multiply this input</summary>
+        public float Factor;
         /// <summary>Whether this axis should be inverted</summary>
         public Boolean[] Inverted;
         /// <summary>Names of the KSP FlightCtrlState attribute this axis should map to in each mode</summary>
@@ -110,6 +112,8 @@ namespace AltInput
         /// of center, and 10,000 indicates that the entire physical range of the axis
         /// is dead.</summary>
         public int DeadZone;
+        /// <summary>Default sensitivity of the device</summary>
+        public float Factor = 1.0f;
         public AltAxis[] Axis;
         public AltPOV[] Pov;
         public AltButton[] Button;
@@ -121,6 +125,8 @@ namespace AltInput
                 throw new ArgumentException("Class must be 'GameControl'");
             this.InstanceGuid = instanceGUID;
             this.Joystick = new Joystick(directInput, instanceGUID);
+            this.enabledModes = new Boolean[GameState.NumModes];
+            this.enabledModes[0] = true;
             this.Axis = new AltAxis[AltDirectInputDevice.AxisList.GetLength(0)];
             for (var i = 0; i < this.Axis.Length; i++)
             {
@@ -163,7 +169,7 @@ namespace AltInput
                 else if (OffsetName.StartsWith("PointOf"))
                 {
                     uint i = uint.Parse(OffsetName.Substring("PointOfViewControllers".Length));
-                    GameState.UpdatePOV(Pov[i], state.Value);
+                    GameState.UpdatePov(Pov[i], state.Value);
                 }
                 else for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
                 {
@@ -185,7 +191,7 @@ namespace AltInput
                             if (value > ((10000.0f - Axis[i].DeadZone) / 10000.0f))
                                 value = 1.0f;
                         }
-                        GameState.UpdateFlightAxis(Axis[i].Mapping[CurrentMode], value, false);
+                        GameState.UpdateAxis(Axis[i].Mapping[CurrentMode], value, Axis[i].Factor, false);
                     }
                 }
             }
@@ -207,6 +213,25 @@ namespace AltInput
         public override void CloseDevice()
         {
             Joystick.Unacquire();
+        }
+
+        /// <summary>
+        /// Resets all buttons and axes. This is used when switching game modes
+        /// </summary>
+        public override void ResetDevice()
+        {
+            uint m = (uint)GameState.CurrentMode;
+
+            for (var i = 0; i < Axis.Length; i++)
+            {
+                // We don't touch the throttle
+                if (Axis[i].isAvailable && (!Axis[i].Mapping[m].EndsWith("Throttle")))
+                    GameState.UpdateAxis(Axis[i].Mapping[m], 0.0f, 1.0f, false);
+            }
+            for (var i = 0; i < Joystick.Capabilities.ButtonCount; i++)
+                GameState.UpdateButton(Button[i], false);
+            for (var i = 0; i < Joystick.Capabilities.PovCount; i++)
+                GameState.UpdatePov(Pov[i], -1);
         }
     }
 }

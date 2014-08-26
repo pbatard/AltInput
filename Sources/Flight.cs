@@ -57,10 +57,13 @@ namespace AltInput
                     GameState.CurrentMode = GameState.Mode.Flight;
                 }
 
-                GameState.UpdateMode();
+//                GameState.CheckForEVA();
 
                 foreach (var Device in Config.DeviceList)
+                {
+                    GameState.CurrentDevice = Device;
                     Device.ProcessInput();
+                }
 
                 GameState.UpdateState(CurrentState);
             }

@@ -103,6 +103,14 @@ namespace AltInput
             // Parse the global dead zone attribute for this device. This is the dead zone
             // that will be applied if there isn't a specific axis override
             int.TryParse(ini.IniReadValue(Section, "DeadZone"), out Device.DeadZone);
+            // Parse the global sensitivity
+            float.TryParse(ini.IniReadValue(Section, "Factor"), out Device.Factor);
+            if (Device.Factor == 0.0f)
+                Device.Factor = 1.0f;
+
+            // Find our which modes have been setup
+            for (var m = 1; m < GameState.NumModes; m++)
+                Device.enabledModes[m] = (ini.IniReadValue(Section + "." + GameState.ModeName[m], null) != "");
 
             // Process the axes
             for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
@@ -125,6 +133,9 @@ namespace AltInput
                     // A slider's deadzone is special and needs to be handled separately
                     if (!AltDirectInputDevice.AxisList[i, 0].StartsWith("Slider"))
                         Device.Joystick.GetObjectPropertiesByName(AltDirectInputDevice.AxisList[i, 0]).DeadZone = Device.Axis[i].DeadZone;
+                    float.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".Factor"), out Device.Axis[i].Factor);
+                    if (Device.Axis[i].Factor == 0.0f)
+                        Device.Axis[i].Factor = Device.Factor;
                     ParseInverted(Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Inverted);
                     Device.Axis[i].isAvailable = (Device.Axis[i].Range.FloatRange != 0.0f);
                     if (!Device.Axis[i].isAvailable)
@@ -145,12 +156,13 @@ namespace AltInput
                     String Mappings = "", Inverted = "";
                     for (var m = 0; m < GameState.NumModes; m++)
                     {
+                        if (!Device.enabledModes[m]) continue;
                         Mappings += ", Mapping[" + GameState.ModeName[m] + "] = '" + Device.Axis[i].Mapping[m] + "'";
                         Inverted += ", Inverted[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Inverted[m];
                     }
                     print("Altinput: Axis #" + (i + 1) + ": Range [" + Device.Axis[i].Range.Minimum + ", " +
                         Device.Axis[i].Range.Maximum + "], DeadZone = " + Device.Axis[i].DeadZone +
-                        Mappings + Inverted);
+                        "], Factor = " + Device.Axis[i].Factor +  Mappings + Inverted);
                 }
 #endif
             }
@@ -163,6 +175,7 @@ namespace AltInput
 #if (DEBUG)
                 for (var m = 0; m < GameState.NumModes; m++)
                 {
+                    if (!Device.enabledModes[m]) continue;
                     String Mappings = "";
                     for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
                         Mappings += ((j != 0) ? ", " : "") + AltDirectInputDevice.POVPositionName[j] + " = " + Device.Pov[i].Button[j].Mapping[m] + ", Value = " + Device.Pov[i].Button[j].Value[m];
@@ -178,8 +191,11 @@ namespace AltInput
 #if (DEBUG)
                 String Mappings = "";
                 for (var m = 0; m < GameState.NumModes; m++)
+                {
+                    if (!Device.enabledModes[m]) continue;
                     Mappings += ((m != 0) ? ", " : "") + "Mapping[" + GameState.ModeName[m] + "] = '" + Device.Button[i].Mapping[m] +
                         "', Value[" + GameState.ModeName[m] + "] = " + Device.Button[i].Value[m];
+                }
                 print("Altinput: Button #" + (i + 1) + ": " + Mappings);
 #endif
             }

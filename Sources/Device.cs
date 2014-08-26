@@ -17,14 +17,17 @@
  */
 
 using System;
+using UnityEngine;
 
 namespace AltInput
 {
     // An abstract device class
-    public abstract class AltDevice
+    public abstract class AltDevice : MonoBehaviour
     {
+        public Boolean[] enabledModes;
         abstract public void OpenDevice();
         abstract public void CloseDevice();
+        abstract public void ResetDevice();
         abstract public void ProcessInput();
     }
 }

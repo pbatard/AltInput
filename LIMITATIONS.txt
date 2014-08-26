@@ -1,8 +1,7 @@
 Below are the current limitations of AltInput.
 
 Since my development time is limited, I currently have no plans to remove the
-following limitations (but you are welcome to send a patch if you want to
-address them!)
+following limitations (but you are welcome to send a patch to address them).
 
 * Windows ONLY:
 - Relies on SharpDX, which is a Windows only library
@@ -16,3 +15,8 @@ address them!)
   Other DirectInput devices are not supported.
 
 * No UI to assign the controls - everything must be set through the ini file.
+
+* No EVA or camera control.
+  From what I could see, handling EVA/camera controls means going through
+  vector transformations and other time consumming stuff.
+  If you want to figure that one, I'll accept a patch!

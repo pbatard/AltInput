@@ -36,11 +36,13 @@ namespace AltInput
         public enum Mode
         {
             Flight = 0,
-            Landed,
-            EVA
+            AltFlight,
+            Ground,
+//            EVA           //
         };
         public readonly static String[] ModeName = Enum.GetNames(typeof(Mode));
         public readonly static int NumModes = ModeName.Length;
+        public static AltDevice CurrentDevice;
 
         public static FlightCtrlState UpdatedState = null;
         public static Mode CurrentMode = Mode.Flight;
@@ -50,26 +52,42 @@ namespace AltInput
             typeof(FlightCtrlState).GetFields().Where(item =>
                 (item.FieldType == typeof(float)) && (!item.Name.Contains("Trim"))).ToArray();
 
-        private static KerbalEVA Eva = null;
+//        private static KerbalEVA Eva = null;
 
         /// <summary>
         /// Update a Flight Vessel axis control (including throttle) by name
         /// </summary>
         /// <param name="AxisName">The name of the axis to update</param>
         /// <param name="value">The value to set</param>
-        public static void UpdateFlightAxis(String AxisName, float value, Boolean isDelta)
+        /// <param name="factor">The factor for the computed value</param>
+        /// <param name="isDelta">If true, the value is a delta, if false, it's absolute</param>
+        public static void UpdateAxis(String AxisName, float value, float factor, Boolean isDelta)
         {
             FieldInfo field = typeof(FlightCtrlState).GetField(AxisName);
+            if (field == null)
+            {
+                print("AltInput: '" + AxisName + "' is not a valid Axis name");
+                return;
+            }
             Boolean isThrottle = AxisName.EndsWith("Throttle");
-
             if (isDelta)
                 value += (float)field.GetValue(UpdatedState);
             else if (isThrottle)
                 value = (value + 1.0f) / 2.0f;
-                
-            value = Mathf.Clamp(value, isThrottle?0.0f:-1.0f, +1.0f);
 
+            value *= factor;
+            value = Mathf.Clamp(value, isThrottle?0.0f:-1.0f, +1.0f);
             field.SetValue(UpdatedState, value);
+        }
+
+        private static Mode GetNextMode()
+        {
+            int mode = (int)CurrentMode;
+            do
+                mode = (mode + 1) % NumModes;
+            while ( (!CurrentDevice.enabledModes[mode]) ||
+                (((Mode)mode == Mode.Ground) && (!FlightGlobals.ActiveVessel.LandedOrSplashed)) );
+            return (Mode)mode;
         }
 
         /// <summary>
@@ -92,39 +110,29 @@ namespace AltInput
 
             // Check if our mapping is a FlightCtrlState axis
             if (AxisFields.Where(item => item.Name == Mapping).Any())
-                UpdateFlightAxis(Mapping, isPressed ? Button.Value[(uint)CurrentMode] : 0.0f, isDelta);
+                UpdateAxis(Mapping, isPressed ? Button.Value[(uint)CurrentMode] : 0.0f, 1.0f, isDelta);
 
             // TODO: Something more elegant (possibly using reflection and a class with all these attributes)
             switch (Mapping)
             {
-                case "activateLanded":
-                    if (isPressed && (CurrentMode == Mode.Flight))
+                case "switchMode":
+                    if (isPressed)
                     {
-                        if (FlightGlobals.ActiveVessel.LandedOrSplashed)
+                        Mode NextMode = GetNextMode();
+                        if (NextMode != CurrentMode)
                         {
-                            CurrentMode = Mode.Landed;
-                            ScreenMessages.PostScreenMessage("Landed mode",
-                                5f, ScreenMessageStyle.UPPER_CENTER);
-                        }
-                        else
-                        {
-                            ScreenMessages.PostScreenMessage("Vessel is not on the ground!", 
-                                5f, ScreenMessageStyle.UPPER_CENTER);
+                            // Ensure that we reset our controls and buttons before switching
+                            CurrentDevice.ResetDevice();
+                            CurrentMode = NextMode;
+                            ScreenMessages.PostScreenMessage("Mode: " + ModeName[(int)CurrentMode],
+                                1f, ScreenMessageStyle.UPPER_CENTER);
                         }
                     }
                     break;
-                case "activateFlight":
-                    if (isPressed && (CurrentMode == Mode.Landed))
-                    {
-                        CurrentMode = Mode.Flight;
-                        ScreenMessages.PostScreenMessage("Flight mode",
-                                5f, ScreenMessageStyle.UPPER_CENTER);
-                    }
-                    break;
-                case "toggleJetpack":
-                    if (isPressed && (CurrentMode == Mode.EVA))
-                        Eva.JetpackDeployed = !Eva.JetpackDeployed;
-                    break;
+//                case "toggleJetpack":
+//                    if (isPressed && (CurrentMode == Mode.EVA))
+//                        Eva.JetpackDeployed = !Eva.JetpackDeployed;
+//                    break;
                 case "switchView":
                     if (isPressed)
                     {
@@ -208,7 +216,7 @@ namespace AltInput
             }
         }
 
-        public static void UpdatePOV(AltPOV Pov, int Angle)
+        public static void UpdatePov(AltPOV Pov, int Angle)
         {
             // Angle in degrees * 100, or -1 at rest.
             // Start by resetting all positions
@@ -222,8 +230,8 @@ namespace AltInput
             UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4], true);
             UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4], true);
         }
-
-        public static void UpdateMode()
+/*
+        public static void CheckForEVA()
         {
             if (FlightGlobals.ActiveVessel.isEVA)
             {
@@ -236,7 +244,7 @@ namespace AltInput
                 Eva = null;
             }
         }
-
+*/
         /// <summary>
         /// Update the current state of the spacecraft according to all inputs
         /// </summary>

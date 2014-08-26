@@ -73,10 +73,9 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `Y` - Translation Y
 * `Z` - Translation Z
 * `toggleAbort`
-* `activateLanded` - switch from 'Flight' to 'Landed' input modes
-* `activateFlight` - switch from 'Landed' to 'Flight' input modes
-   __NB:__ If you map both of the above to the same button, you can effectively 
-   toggle between 'Flight' and 'Landed' modes.
+* `switchMode` - switch input mode(Flight/AltFlight/Ground). This effectively 
+   means that the relevant [input#.<Mode>] section is used for the controls. 
+   Note: 'Ground' mode only becomes available if the craft is landed or splashed.
 * `activateBrakes`
 * `toggleBrakes`
 * `activateCustom[01-10]`
