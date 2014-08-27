@@ -67,7 +67,7 @@ namespace AltInput
     {
         /// <summary>Names of the KSP FlightCtrlState attribute this button should map to in each mode</summary>
         public String[] Mapping;
-        /// <summary>For an axis, the value we pass to KSP when the button is pressed</summary>
+        /// <summary>For an axis, the value or delta to pass to KSP when the button is pressed</summary>
         public float[] Value;
     }
 

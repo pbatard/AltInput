@@ -47,6 +47,7 @@ namespace AltInput
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
 
+        // TODO: call on ParseMapping instead of duplicating much of this code
         private void ParseButton(AltDirectInputDevice Device, String Section, String Name, ref AltButton Button)
         {
             for (var m = 0; m < GameState.NumModes; m++)
@@ -63,9 +64,9 @@ namespace AltInput
                     ConfigData = Override;
                 try
                 {
-                    String[] Values = ConfigData.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
-                    Button.Mapping[m] = Values[0];
-                    float.TryParse(Values[1], out Button.Value[m]);
+                    String[] MappingData = ConfigData.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+                    Button.Mapping[m] = MappingData[0];
+                    float.TryParse(MappingData[1], out Button.Value[m]);
                 }
                 catch (Exception) { }
             }
@@ -181,7 +182,7 @@ namespace AltInput
                     }
                     print("Altinput: Axis #" + (i + 1) + ": Range [" + Device.Axis[i].Range.Minimum + ", " +
                         Device.Axis[i].Range.Maximum + "], DeadZone = " + Device.Axis[i].DeadZone +
-                        "], Factor = " + Device.Axis[i].Factor +  Mappings + Inverted);
+                        ", Factor = " + Device.Axis[i].Factor +  Mappings + Inverted);
                 }
 #endif
             }
@@ -262,7 +263,7 @@ namespace AltInput
 
                 foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
                 {
-                    if ((DeviceName == "") || (dev.InstanceName.StartsWith(DeviceName)))
+                    if ((DeviceName == "") || (dev.InstanceName.Contains(DeviceName)))
                     {
                         // Only add this device if not already in our list
                         if (DeviceList.Where(item => ((AltDirectInputDevice)item).InstanceGuid == dev.InstanceGuid).Any())

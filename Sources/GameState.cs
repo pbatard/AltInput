@@ -3,6 +3,8 @@
  * Copyright © 2014 Pete Batard <pete@akeo.ie>
  * Thanks go to zitronen for KSPSerialIO, which helped figure out
  * spacecraft controls in KSP: https://github.com/zitron-git/KSPSerialIO
+ * TimeWarp handling from MechJeb2 by BloodyRain2k:
+ * https://github.com/MuMech/MechJeb2/blob/master/MechJeb2/MechJebModuleWarpController.cs
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -101,9 +103,26 @@ namespace AltInput
                 return;
 
             // Check if we have a delta rather than an absolute value
+            // TODO: set an isDelta attribute on the device
             Boolean isDelta = (Mapping.EndsWith(".Delta"));
             if (isDelta)
                 Mapping = Mapping.Split('.')[0];
+
+            // If we are in a time warp, drop all actions besides the ones we authorise below
+            if (TimeWarp.CurrentRate != 1)
+            {
+                switch (Mapping)
+                {
+                    case "increaseWarp":
+                    case "decreaseWarp":
+                    case "switchMode":
+                    case "switchView":
+                    case "toggleMapView":
+                        break;
+                    default:
+                        return;
+                }
+            }
 
             // Check if our mapping is a FlightCtrlState axis
             if (AxisFields.Where(item => item.Name == Mapping).Any())
@@ -112,6 +131,26 @@ namespace AltInput
             // TODO: Something more elegant (possibly using reflection and a class with all these attributes)
             switch (Mapping)
             {
+                case "increaseWarp":
+                    //do a bunch of checks to see if we can increase the warp rate:
+                    if (TimeWarp.CurrentRateIndex + 1 == TimeWarp.fetch.warpRates.Length)
+                        break; // Already at max warp
+                    if (!FlightGlobals.ActiveVessel.LandedOrSplashed)
+                    {
+                        CelestialBody mainBody = FlightGlobals.getMainBody();
+                        double instantAltitudeASL = (FlightGlobals.ActiveVessel.CoM - mainBody.position).magnitude - mainBody.Radius;
+                        if (TimeWarp.fetch.GetAltitudeLimit(TimeWarp.CurrentRateIndex + 1, mainBody) > instantAltitudeASL)
+                            break; // Altitude too low to increase warp
+                    }
+                    if (TimeWarp.fetch.warpRates[TimeWarp.CurrentRateIndex] != TimeWarp.CurrentRate)
+                        break; // Most recent warp change is not yet complete
+                    TimeWarp.SetRate(TimeWarp.CurrentRateIndex + 1, false);
+                    break;
+                case "decreaseWarp":
+                    if (TimeWarp.CurrentRateIndex == 0)
+                        break; // Already at minimum warp
+                    TimeWarp.SetRate(TimeWarp.CurrentRateIndex - 1, false);
+                    break;
                 case "switchMode":
                     if (isPressed)
                     {

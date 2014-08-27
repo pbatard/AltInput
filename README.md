@@ -8,8 +8,8 @@ Description
 This module provides an alternate input method for Kerbal Space Program.
 
 Currently it only does so for [DirectInput](httpmsdn.microsoft.com/en-us/library/windows/desktop/ee416842.aspx)
-Joysticks, and as such will only work on Windows, but it could be extended to
-support any other kind of input.
+Joysticks, and as such will only work on Windows. 
+But it could be extended to support any other kind of input.
 
 __IMPORTANT:__ This module provides its OWN version of the [SharpDX](http://sharpdx.org/)
 DLLs, due to a [BUG](https://github.com/sharpdx/SharpDX/issues/406) in the Unity engine.
@@ -61,7 +61,7 @@ These are the names you should use for `Control` when adding a
 
 Anything that isn't in the list above is not handled.
 
-The following KSP controls can be mapped to an input. These are the names you should
+The following KSP actions can be mapped to an input. These are the names you should
 use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `yaw`
 * `pitch`
@@ -89,6 +89,8 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `activateStaging`
 * `switchView` - Switch camera view (auto/free/orbital/chase)
 * `toggleMapView` - Switch between Map view and Staging/Docking view
+* `increaseWarp`
+* `decreaseWarp`
 
 Anything that isn't in the list above is not handled.
 
@@ -106,3 +108,15 @@ then a trivial matter.
 
 __Hint:__ You can also easily identify which button is which in this dialog by
 pressing them and writing down the number that gets highlighted then.
+
+FAQ
+--------------------------------------
+
+### Why don't you use use Unity's _Input_, instead of reinventing the wheel?
+
+Unity's _Input_ doesn't support POV (Point of View) hats. At all. Also it uses
+`DirectRaw` to access controllers, which is super sucky. And you can also forget
+about using a slider to control a throttle with Unity's _Input_.
+
+The Unity developers have repeatedly indicated that they have NO INTENTION of
+addressing these serious shortcomings, so this leaves very little choice...

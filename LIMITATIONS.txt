@@ -8,7 +8,7 @@ following limitations (but you are welcome to send a patch to address them).
 - Relies on WritePrivateProfileString/GetPrivateProfileString, which are
   Windows kernel32.dll APIs
 
-* Device must be a DirectInput controller. 
+* Device must be a DirectInput controller.
   Other methods of querying input are not supported.
 
 * Device must belong to DirectInput 'GameControl class. 

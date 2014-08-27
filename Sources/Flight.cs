@@ -83,14 +83,26 @@ namespace AltInput
                 FlightGlobals.ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
         }
 
+        // OnFlyByWire isn't invoked when time warp is in use, so we need to add a custom
+        // repeated call to check if one of the actions we allow during warp actions was invoked.
+        public void FixedUpdate()
+        {
+            // If we're not at warp, don't do anything (we'll pick our actions from the regular callback)
+            if (TimeWarp.CurrentRate == 1)
+                return;
+
+            foreach (var Device in Config.DeviceList)
+            {
+                GameState.CurrentDevice = Device;
+                Device.ProcessInput();
+            }
+        }
+
         void OnDestroy()
         {
 #if (DEBUG)
             print("AltInput: ProcessInput.OnDestroy()");
 #endif
-//            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
-//            if (ActiveVessel != null)
-//                ActiveVessel.OnFlyByWire -= new FlightInputCallback(ControllerInput);
             foreach (var Device in Config.DeviceList)
                 Device.CloseDevice();
         }
