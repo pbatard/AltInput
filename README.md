@@ -1,13 +1,15 @@
 AltInput — Alternate Input plugin for Kerbal Space Program
 ==========================================================
 
+__Note:__ Pre-compiled binaries for this plugin can be found at
+http://ksp.akeo.ie/downloads/AltInput
 
 Description
 --------------------------------------
 
 This module provides an alternate input method for Kerbal Space Program.
 
-Currently it only does so for [DirectInput](httpmsdn.microsoft.com/en-us/library/windows/desktop/ee416842.aspx)
+Currently it only does so for [DirectInput](http://msdn.microsoft.com/en-us/library/windows/desktop/ee416842.aspx)
 Joysticks, and as such will only work on Windows. 
 But it could be extended to support any other kind of input.
 
