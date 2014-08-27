@@ -57,8 +57,6 @@ namespace AltInput
                     GameState.CurrentMode = GameState.Mode.Flight;
                 }
 
-//                GameState.CheckForEVA();
-
                 foreach (var Device in Config.DeviceList)
                 {
                     GameState.CurrentDevice = Device;
@@ -81,9 +79,8 @@ namespace AltInput
                 ScreenMessages.PostScreenMessage("AltInput: No controller detected", 5f,
                     ScreenMessageStyle.UPPER_LEFT);
             // Add our handler
-            Vessel ActiveVessel = FlightGlobals.ActiveVessel;
-            if (ActiveVessel != null)
-                ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
+            if (FlightGlobals.ActiveVessel != null)
+                FlightGlobals.ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
         }
 
         void OnDestroy()

@@ -47,12 +47,16 @@ namespace AltInput
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
 
-        private void ParseButton(String Section, String Name, ref AltButton Button)
+        private void ParseButton(AltDirectInputDevice Device, String Section, String Name, ref AltButton Button)
         {
             for (var m = 0; m < GameState.NumModes; m++)
             {
-                // Try to read from the common section first
+                if (!Device.enabledModes[m])
+                    continue;
+                // Try to read from the common/.Flight section first
                 var ConfigData = ini.IniReadValue(Section, Name);
+                if ((m != 0) && (ConfigData == ""))
+                    ConfigData = ini.IniReadValue(Section + "." + GameState.ModeName[0], Name);
                 // Then check for an override
                 var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name);
                 if (Override != "")
@@ -67,12 +71,16 @@ namespace AltInput
             }
         }
 
-        private void ParseMapping(String Section, String Name, ref String[] Mapping)
+        private void ParseMapping(AltDirectInputDevice Device, String Section, String Name, ref String[] Mapping)
         {
             for (var m = 0; m < GameState.NumModes; m++)
             {
-                // Try to read a mapping from the common section first
+                if (!Device.enabledModes[m])
+                    continue;
+                // Try to read a mapping from the common/.Flight section first
                 Mapping[m] = ini.IniReadValue(Section, Name);
+                if ((m != 0) && (Mapping[m] == ""))
+                    Mapping[m] = ini.IniReadValue(Section + "." + GameState.ModeName[0], Name);
                 // Then check for an override
                 var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name);
                 if (Override != "")
@@ -80,12 +88,22 @@ namespace AltInput
             }
         }
 
-        private void ParseInverted(String Section, String Name, ref Boolean[] Inverted)
+        private void ParseInverted(AltDirectInputDevice Device, String Section, String Name, ref Boolean[] Inverted)
         {
             for (var m = 0; m < GameState.NumModes; m++)
             {
-                // Try to read the inverted attribute from the common section first
-                Boolean.TryParse(ini.IniReadValue(Section, Name + ".Inverted"), out Inverted[m]);
+                String s;
+                if (!Device.enabledModes[m])
+                    continue;
+                // Try to read the inverted attribute from the common/.Flight section first
+                s = ini.IniReadValue(Section, Name + ".Inverted");
+                Boolean.TryParse(s, out Inverted[m]);
+                if ((m != 0) && (s == ""))
+                {
+                    s = ini.IniReadValue(Section + "." + GameState.ModeName[0], Name + ".Inverted");
+                    if (s != "")
+                    Boolean.TryParse(s, out Inverted[m]);
+                }
                 // Then check for an override
                 var Override = ini.IniReadValue(Section + "." + GameState.ModeName[m], Name + ".Inverted");
                 if (Override != "")
@@ -123,7 +141,7 @@ namespace AltInput
                     Device.Axis[i].Range.Minimum = Range.Minimum;
                     Device.Axis[i].Range.Maximum = Range.Maximum;
                     Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
-                    ParseMapping(Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Mapping);
+                    ParseMapping(Device, Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Mapping);
                     // TODO: check if mapping name is valid and if it's already been assigned
                     int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out Device.Axis[i].DeadZone);
                     if (Device.Axis[i].DeadZone == 0)
@@ -136,13 +154,14 @@ namespace AltInput
                     float.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".Factor"), out Device.Axis[i].Factor);
                     if (Device.Axis[i].Factor == 0.0f)
                         Device.Axis[i].Factor = Device.Factor;
-                    ParseInverted(Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Inverted);
+                    ParseInverted(Device, Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Inverted);
                     Device.Axis[i].isAvailable = (Device.Axis[i].Range.FloatRange != 0.0f);
                     if (!Device.Axis[i].isAvailable)
                         print("Altinput: WARNING - Axis " + AltDirectInputDevice.AxisList[i, 1] +
                             " was disabled because its range is zero.");
                 }
-                // SharpDX.SharpDXException: HRESULT: [0x80070002], Module: [SharpDX.DirectInput], ApiCode: [DIERR_NOTFOUND/NotFound], Message: The system cannot find the file specified.
+                // Typical exception "SharpDX.SharpDXException: HRESULT: [0x80070002], Module: [SharpDX.DirectInput],
+                // ApiCode: [DIERR_NOTFOUND/NotFound], Message: The system cannot find the file specified."
                 catch (SharpDX.SharpDXException ex)
                 {
                     if (ex.ResultCode == 0x80070002)
@@ -171,7 +190,7 @@ namespace AltInput
             for (var i = 0; i < Device.Joystick.Capabilities.PovCount; i++)
             {
                 for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
-                    ParseButton(Section, "POV" + (i + 1) + "." + AltDirectInputDevice.POVPositionName[j], ref Device.Pov[i].Button[j]);
+                    ParseButton(Device, Section, "POV" + (i + 1) + "." + AltDirectInputDevice.POVPositionName[j], ref Device.Pov[i].Button[j]);
 #if (DEBUG)
                 for (var m = 0; m < GameState.NumModes; m++)
                 {
@@ -187,7 +206,7 @@ namespace AltInput
             // Process the buttons
             for (var i = 0; i < Device.Joystick.Capabilities.ButtonCount; i++)
             {
-                ParseButton(Section, "Button" + (i + 1), ref Device.Button[i]);
+                ParseButton(Device, Section, "Button" + (i + 1), ref Device.Button[i]);
 #if (DEBUG)
                 String Mappings = "";
                 for (var m = 0; m < GameState.NumModes; m++)

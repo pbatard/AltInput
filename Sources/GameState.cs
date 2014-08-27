@@ -38,7 +38,6 @@ namespace AltInput
             Flight = 0,
             AltFlight,
             Ground,
-//            EVA           //
         };
         public readonly static String[] ModeName = Enum.GetNames(typeof(Mode));
         public readonly static int NumModes = ModeName.Length;
@@ -51,8 +50,6 @@ namespace AltInput
         public readonly static FieldInfo[] AxisFields =
             typeof(FlightCtrlState).GetFields().Where(item =>
                 (item.FieldType == typeof(float)) && (!item.Name.Contains("Trim"))).ToArray();
-
-//        private static KerbalEVA Eva = null;
 
         /// <summary>
         /// Update a Flight Vessel axis control (including throttle) by name
@@ -122,17 +119,14 @@ namespace AltInput
                         if (NextMode != CurrentMode)
                         {
                             // Ensure that we reset our controls and buttons before switching
+                            // TODO: drop ResetDevice() and check that no buttons/POVs are active besides mode switch instead
                             CurrentDevice.ResetDevice();
                             CurrentMode = NextMode;
-                            ScreenMessages.PostScreenMessage("Mode: " + ModeName[(int)CurrentMode],
+                            ScreenMessages.PostScreenMessage("Input Mode: " + ModeName[(int)CurrentMode],
                                 1f, ScreenMessageStyle.UPPER_CENTER);
                         }
                     }
                     break;
-//                case "toggleJetpack":
-//                    if (isPressed && (CurrentMode == Mode.EVA))
-//                        Eva.JetpackDeployed = !Eva.JetpackDeployed;
-//                    break;
                 case "switchView":
                     if (isPressed)
                     {
@@ -183,7 +177,8 @@ namespace AltInput
                     FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, isPressed);
                     break;
                 case "toggleBrakes":
-                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
+                    if (isPressed)
+                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
                     break;
                 case "toggleCustom01":
                 case "toggleCustom02":
@@ -230,21 +225,7 @@ namespace AltInput
             UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4], true);
             UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4], true);
         }
-/*
-        public static void CheckForEVA()
-        {
-            if (FlightGlobals.ActiveVessel.isEVA)
-            {
-                if (GameState.CurrentMode != GameState.Mode.EVA)
-                    GameState.CurrentMode = GameState.Mode.EVA;
-                Eva = FlightGlobals.ActiveVessel.rootPart.gameObject.GetComponent<KerbalEVA>();
-            }
-            else if (Eva != null)
-            {
-                Eva = null;
-            }
-        }
-*/
+
         /// <summary>
         /// Update the current state of the spacecraft according to all inputs
         /// </summary>
@@ -255,14 +236,21 @@ namespace AltInput
             foreach (FieldInfo field in AxisFields)
             {
                 if (Math.Abs((float)field.GetValue(CurrentState)) < Math.Abs((float)field.GetValue(UpdatedState)))
+                {
                     field.SetValue(CurrentState, (float)field.GetValue(UpdatedState));
+                    // The throttles are a real PITA to override
+                    if (field.Name == "mainThrottle")
+                        FlightInputHandler.state.mainThrottle = 0.0f;
+                    else if (field.Name == "wheelThrottle")
+                        FlightInputHandler.state.wheelThrottle = 0.0f;
+                }
             }
 
             // If SAS is on, we need to override it or else our changes are ignored
             VesselSAS VesselSAS = FlightGlobals.ActiveVessel.vesselSAS;
             Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > VesselSAS.controlDetectionThreshold) ||
-                                  (Math.Abs(CurrentState.yaw) > VesselSAS.controlDetectionThreshold) ||
-                                  (Math.Abs(CurrentState.roll) > VesselSAS.controlDetectionThreshold);
+                                    (Math.Abs(CurrentState.yaw) > VesselSAS.controlDetectionThreshold) ||
+                                    (Math.Abs(CurrentState.roll) > VesselSAS.controlDetectionThreshold);
             VesselSAS.ManualOverride(overrideSAS);
         }
     }
