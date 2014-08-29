@@ -38,6 +38,8 @@ namespace AltInput
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
+        public static readonly float currentVersion = 1.3f;
+        public static float iniVersion;
         /// <summary>The maximum number of device instances that can be present in a config file</summary>
         private readonly uint NumDevices = 128;
         // Good developers do NOT let end-users fiddle with XML configuration files...
@@ -118,10 +120,12 @@ namespace AltInput
         private void SetAttributes(AltDirectInputDevice Device, String Section)
         {
             InputRange Range;
+            float deadzone;
 
             // Parse the global dead zone attribute for this device. This is the dead zone
             // that will be applied if there isn't a specific axis override
-            int.TryParse(ini.IniReadValue(Section, "DeadZone"), out Device.DeadZone);
+            float.TryParse(ini.IniReadValue(Section, "DeadZone"), out deadzone);
+            Device.DeadZone = (int) (10000.0f * deadzone);
             // Parse the global sensitivity
             float.TryParse(ini.IniReadValue(Section, "Factor"), out Device.Factor);
             if (Device.Factor == 0.0f)
@@ -144,7 +148,9 @@ namespace AltInput
                     Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
                     ParseMapping(Device, Section, AltDirectInputDevice.AxisList[i, 1], ref Device.Axis[i].Mapping);
                     // TODO: check if mapping name is valid and if it's already been assigned
-                    int.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out Device.Axis[i].DeadZone);
+
+                    float.TryParse(ini.IniReadValue(Section, AltDirectInputDevice.AxisList[i, 1] + ".DeadZone"), out deadzone);
+                    Device.Axis[i].DeadZone = (int)(10000.0f * deadzone);
                     if (Device.Axis[i].DeadZone == 0)
                         // Override with global dead zone if none was specified
                         // NB: This prohibits setting a global dead zone and then an individual to 0 - oh well...
@@ -181,7 +187,7 @@ namespace AltInput
                         Inverted += ", Inverted[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Inverted[m];
                     }
                     print("Altinput: Axis #" + (i + 1) + ": Range [" + Device.Axis[i].Range.Minimum + ", " +
-                        Device.Axis[i].Range.Maximum + "], DeadZone = " + Device.Axis[i].DeadZone +
+                        Device.Axis[i].Range.Maximum + "], DeadZone = " + (Device.Axis[i].DeadZone / 10000.0f) +
                         ", Factor = " + Device.Axis[i].Factor +  Mappings + Inverted);
                 }
 #endif
@@ -230,6 +236,10 @@ namespace AltInput
             String InterfaceName, ClassName, DeviceName;
             AltDirectInputDevice Device;
             DeviceClass InstanceClass = DeviceClass.GameControl;
+
+            float.TryParse(ini.IniReadValue("global", "Version"), out iniVersion);
+            if (iniVersion != currentVersion)
+                return;
 
             for (var i = 1; i <= NumDevices; i++)
             {
