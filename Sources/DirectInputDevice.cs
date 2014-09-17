@@ -17,6 +17,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 
 // IMPORTANT: To be able to work with Unity, which is *BROKEN*,
 // you must have a patched version of SharpDX.DirectInput such
@@ -26,6 +27,20 @@ using SharpDX.DirectInput;
 
 namespace AltInput
 {
+    public enum MappingType
+    {
+        Range,
+        Absolute,
+        Delta,
+    }
+
+    public enum ControlType
+    {
+        OneShot,
+        Continuous,
+        Axis,
+    }
+
     /// <summary>
     /// The range of a axis
     /// </summary>
@@ -37,6 +52,30 @@ namespace AltInput
         public float FloatRange;
     }
 
+    public struct AltMapping
+    {
+        /// <summary>Type of the mapping</summary>
+        public MappingType Type;
+        /// <summary>Name of the KSP game action this control should map to</summary>
+        public String Action;
+        /// <summary>Value the action should take, in case of an axis</summary>
+        public float Value;
+    }
+
+    public struct AltControl
+    {
+        public ControlType Type;
+        public Boolean Inverted;
+        /// <summary>Dead zone, in the range 0.0 through 1.0, where 0.0 indicates that there
+        /// is no dead zone, 0.5 indicates that the dead zone extends over 50 percent of the
+        /// physical range of the axis and 1.0 indicates that the entire physical range of
+        /// the axis is dead. For regular axes, the dead zone is applied to the center. For
+        /// sliders, to the edges.</summary>
+        public float DeadZone;
+        /// <summary>Factor by which to multiply this input</summary>
+        public float Factor;
+    }
+
     /// <summary>
     /// An axis on the input device
     /// </summary>
@@ -46,18 +85,13 @@ namespace AltInput
         public Boolean isAvailable;
         /// <summary>The range of this axis</summary>
         public AltRange Range;
-        /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
-        /// where 0 indicates that there is no dead zone, 5,000 indicates that the dead
-        /// zone extends over 50 percent of the physical range of the axis and 10,000
-        /// indicates that the entire physical range of the axis is dead. For regular
-        /// axes, the dead zone applies to the center or, for sliders, to the edges</summary>
-        public int DeadZone;
-        /// <summary>factor by which to multiply this input</summary>
-        public float Factor;
-        /// <summary>Whether this axis should be inverted</summary>
-        public Boolean[] Inverted;
-        /// <summary>Names of the KSP FlightCtrlState attribute this axis should map to in each mode</summary>
-        public String[] Mapping;
+        /// <summary>Last recorded value (to detect transitions)</summary>
+        public float LastValue;
+        /// <summary>The control determines how we should handle the axis</summary>
+        public AltControl[] Control;
+        // TODO: move Mapping inside the control struct?
+        public AltMapping[] Mapping1;   // Regular mapping or Min mapping for thresholded values
+        public AltMapping[] Mapping2;   // Max mapping for thresholded values
     }
 
     /// <summary>
@@ -65,10 +99,7 @@ namespace AltInput
     /// </summary>
     public struct AltButton
     {
-        /// <summary>Names of the KSP FlightCtrlState attribute this button should map to in each mode</summary>
-        public String[] Mapping;
-        /// <summary>For an axis, the value or delta to pass to KSP when the button is pressed</summary>
-        public float[] Value;
+        public AltMapping[] Mapping;
     }
 
     /// <summary>
@@ -81,7 +112,6 @@ namespace AltInput
         // when you can't do something as elementary as declaring a BLOODY FIXED SIZE ARRAY IN A STRUCT...
     }
 
-    // TODO: we may derive this from a parent class when we support more than DI
     /// <summary>
     /// A Direct Input Device (typically a game controller)
     /// </summary>
@@ -106,12 +136,12 @@ namespace AltInput
             { "Sliders0", "Slider1" }, { "Sliders1", "Slider2" } };
         public DeviceClass Class;
         public Guid InstanceGuid;
-        /// <summary>Default dead zone of the axes, in the range 0 through 10,000,
-        /// where 0 indicates that there is no dead zone, 5,000 indicates that the dead
-        /// zone extends over 50 percent of the physical range of the axis on both sides
-        /// of center, and 10,000 indicates that the entire physical range of the axis
-        /// is dead.</summary>
-        public int DeadZone;
+        /// <summary>Default dead zone, in the range 0.0 through 1.0, where 0.0 indicates that
+        /// there is no dead zone, 0.5 indicates that the dead zone extends over 50 percent of
+        /// the physical range of the axis and 1.0 indicates that the entire physical range of
+        /// the axis is dead. For regular axes, the dead zone is applied to the center. For
+        /// sliders, to the edges.</summary>
+        public float DeadZone;
         /// <summary>Default sensitivity of the device</summary>
         public float Factor = 1.0f;
         public AltAxis[] Axis;
@@ -130,8 +160,9 @@ namespace AltInput
             this.Axis = new AltAxis[AltDirectInputDevice.AxisList.GetLength(0)];
             for (var i = 0; i < this.Axis.Length; i++)
             {
-                this.Axis[i].Mapping = new String[GameState.NumModes];
-                this.Axis[i].Inverted = new Boolean[GameState.NumModes];
+                this.Axis[i].Control = new AltControl[GameState.NumModes];
+                this.Axis[i].Mapping1 = new AltMapping[GameState.NumModes];
+                this.Axis[i].Mapping2 = new AltMapping[GameState.NumModes];
             }
             this.Pov = new AltPOV[this.Joystick.Capabilities.PovCount];
 
@@ -139,21 +170,17 @@ namespace AltInput
             {
                 this.Pov[i].Button = new AltButton[NumPOVPositions];
                 for (var j = 0; j < NumPOVPositions; j++)
-                {
-                    this.Pov[i].Button[j].Mapping = new String[GameState.NumModes];
-                    this.Pov[i].Button[j].Value = new float[GameState.NumModes];
-                }
+                    this.Pov[i].Button[j].Mapping = new AltMapping[GameState.NumModes];
             }
             this.Button = new AltButton[this.Joystick.Capabilities.ButtonCount];
             for (var i = 0; i < this.Button.Length; i++)
-            {
-                this.Button[i].Mapping = new String[GameState.NumModes];
-                this.Button[i].Value = new float[GameState.NumModes];
-            }
+                this.Button[i].Mapping = new AltMapping[GameState.NumModes];
         }
 
         public override void ProcessInput()
         {
+            List<String> updatedAxes = new List<String>();
+            uint CurrentMode = (uint)GameState.CurrentMode;
             Joystick.Poll();
             var data = Joystick.GetBufferedData();
             foreach (var state in data)
@@ -163,37 +190,79 @@ namespace AltInput
                 {
                     // This call should always succeed
                     uint i = uint.Parse(OffsetName.Substring("Buttons".Length));
-                    // For now we consider that a non zero value means the button is pressed
-                    GameState.UpdateButton(Button[i], (state.Value != 0));
+                    // DirectInput doc says a button is pressed if the MSB is set
+                    GameState.UpdateButton(Button[i].Mapping[(uint)GameState.CurrentMode], (state.Value >= 0x80)? 1.0f : 0.0f);
                 }
                 else if (OffsetName.StartsWith("PointOf"))
                 {
                     uint i = uint.Parse(OffsetName.Substring("PointOfViewControllers".Length));
-                    GameState.UpdatePov(Pov[i], state.Value);
+                    GameState.UpdatePov(Pov[i], state.Value, (uint)GameState.CurrentMode);
                 }
                 else for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
                 {
-                    uint CurrentMode = (uint)GameState.CurrentMode;
-                    if ((!Axis[i].isAvailable) || (String.IsNullOrEmpty(Axis[i].Mapping[CurrentMode])))
+                    if ((!Axis[i].isAvailable) || (String.IsNullOrEmpty(Axis[i].Mapping1[CurrentMode].Action)))
                         continue;
                     if (OffsetName == AltDirectInputDevice.AxisList[i,0])
                     {
                         float value = ((state.Value - Axis[i].Range.Minimum) /
                             (0.5f * Axis[i].Range.FloatRange)) - 1.0f;
-                        if (Axis[i].Inverted[(uint)CurrentMode])
+                        if (Axis[i].Control[CurrentMode].Inverted)
                             value = -value;
-                        // We need to handle a slider's deadzone ourselves, as it applies to
-                        // the edges rather than the center
+                        // Because we computed some stuff, we need to apply the dead zone ourselves.
+                        // Also a slider's dead zone applies to the edges rather than the center.
                         if (OffsetName.StartsWith("Slider"))
                         {
-                            if (value < ((-10000.0f + Axis[i].DeadZone) / 10000.0f))
+                            if (value < (-1.0f + Axis[i].Control[CurrentMode].DeadZone))
                                 value = -1.0f;
-                            if (value > ((10000.0f - Axis[i].DeadZone) / 10000.0f))
+                            if (value > (1.0f - Axis[i].Control[CurrentMode].DeadZone))
                                 value = 1.0f;
                         }
-                        GameState.UpdateAxis(Axis[i].Mapping[CurrentMode], value, Axis[i].Factor, false);
+                        else
+                        {
+                            if (Math.Abs(value) < Axis[i].Control[CurrentMode].DeadZone)
+                                value = 0.0f;
+                        }
+
+                        switch (Axis[i].Control[CurrentMode].Type)
+                        {
+                            case ControlType.Axis:
+                                GameState.UpdateAxis(Axis[i].Mapping1[CurrentMode], value, Axis[i].Control[CurrentMode].Factor);
+                                break;
+                            case ControlType.OneShot:
+                                var MinThreshold = -1.0f * Axis[i].Control[CurrentMode].DeadZone;
+                                var MaxThreshold = +1.0f * Axis[i].Control[CurrentMode].DeadZone;
+                                // When an axis is used as OneShot, we detect transitions across the threshold(s)
+                                if ((Axis[i].LastValue < MinThreshold) && (value >= MinThreshold))
+                                    GameState.UpdateButton(Axis[i].Mapping1[CurrentMode], 0.0f);
+                                else if ((Axis[i].LastValue > MinThreshold) && (value <= MinThreshold))
+                                    GameState.UpdateButton(Axis[i].Mapping1[CurrentMode], 1.0f);
+                                else if ((Axis[i].LastValue < MaxThreshold) && (value >= MaxThreshold))
+                                    GameState.UpdateButton(Axis[i].Mapping2[CurrentMode], 1.0f);
+                                else if ((Axis[i].LastValue > MaxThreshold) && (value <= MaxThreshold))
+                                    GameState.UpdateButton(Axis[i].Mapping2[CurrentMode], 0.0f);
+                                break;
+                            case ControlType.Continuous:
+                                updatedAxes.Add(OffsetName);
+                                GameState.UpdateButton((value < 0.0f) ? Axis[i].Mapping1[CurrentMode] :
+                                    Axis[i].Mapping2[CurrentMode], Math.Abs(value));
+                                break; 
+                            default:
+                                print("AltInput: DirectInputDevice.ProcessInput() - unhandled control type");
+                                break;
+                        }
+                        Axis[i].LastValue = value;
                     }
                 }
+            }
+            // Now update all axes that are in Continuous mode and that weren't previously updated
+            for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
+            {
+                // Only update the axis if it's Continuous and we didn't update it above and it's nonzero
+                if ((!Axis[i].isAvailable) || (Axis[i].Control[CurrentMode].Type != ControlType.Continuous) ||
+                    (updatedAxes.Contains(AltDirectInputDevice.AxisList[i, 0])) || (Axis[i].LastValue == 0.0f))
+                    continue;
+                GameState.UpdateButton((Axis[i].LastValue < 0.0f) ? Axis[i].Mapping1[CurrentMode] :
+                    Axis[i].Mapping2[CurrentMode], Math.Abs(Axis[i].LastValue));
             }
         }
 
@@ -225,13 +294,13 @@ namespace AltInput
             for (var i = 0; i < Axis.Length; i++)
             {
                 // We don't touch the throttle
-                if (Axis[i].isAvailable && (!Axis[i].Mapping[m].EndsWith("Throttle")))
-                    GameState.UpdateAxis(Axis[i].Mapping[m], 0.0f, 1.0f, false);
+                if (Axis[i].isAvailable && (!Axis[i].Mapping1[m].Action.EndsWith("Throttle")))
+                    GameState.UpdateAxis(Axis[i].Mapping1[m], 0.0f, Axis[i].Control[m].Factor);
             }
             for (var i = 0; i < Joystick.Capabilities.ButtonCount; i++)
-                GameState.UpdateButton(Button[i], false);
+                GameState.UpdateButton(Button[i].Mapping[m], 0.0f);
             for (var i = 0; i < Joystick.Capabilities.PovCount; i++)
-                GameState.UpdatePov(Pov[i], -1);
+                GameState.UpdatePov(Pov[i], -1, m);
         }
     }
 }

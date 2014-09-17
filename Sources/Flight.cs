@@ -72,7 +72,7 @@ namespace AltInput
 #if (DEBUG)
             print("AltInput: ProcessInput.Start()");
 #endif
-            // TODO: only list/acquire controller if we have some mapping assigned
+            // TODO: Only list/acquire controller if we have some mapping assigned
             foreach (var Device in Config.DeviceList)
                 Device.OpenDevice();
             if (Config.iniVersion != Config.currentVersion) {

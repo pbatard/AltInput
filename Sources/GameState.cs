@@ -56,20 +56,19 @@ namespace AltInput
         /// <summary>
         /// Update a Flight Vessel axis control (including throttle) by name
         /// </summary>
-        /// <param name="AxisName">The name of the axis to update</param>
-        /// <param name="value">The value to set</param>
+        /// <param name="Mapping">The mapping for the axis to update</param>
+        /// <param name="value">The value to set, if override</param>
         /// <param name="factor">The factor for the computed value</param>
-        /// <param name="isDelta">If true, the value is a delta, if false, it's absolute</param>
-        public static void UpdateAxis(String AxisName, float value, float factor, Boolean isDelta)
+        public static void UpdateAxis(AltMapping Mapping, float value, float factor)
         {
-            FieldInfo field = typeof(FlightCtrlState).GetField(AxisName);
+            FieldInfo field = typeof(FlightCtrlState).GetField(Mapping.Action);
             if (field == null)
             {
-                print("AltInput: '" + AxisName + "' is not a valid Axis name");
+                print("AltInput: '" + Mapping.Action + "' is not a valid Axis name");
                 return;
             }
-            Boolean isThrottle = AxisName.EndsWith("Throttle");
-            if (isDelta)
+            Boolean isThrottle = Mapping.Action.EndsWith("Throttle");
+            if (Mapping.Type == MappingType.Delta)
                 value += (float)field.GetValue(UpdatedState);
             else if (isThrottle)
                 value = (value + 1.0f) / 2.0f;
@@ -94,24 +93,17 @@ namespace AltInput
         /// </summary>
         /// <param name="Name">The name of the axis to update</param>
         /// <param name="value">The value to set</param>
-        public static void UpdateButton(AltButton Button, Boolean isPressed)
+        public static void UpdateButton(AltMapping Mapping, float value)
         {
             int i;
 
-            String Mapping = Button.Mapping[(uint)CurrentMode];
-            if (Mapping == null)
+            if (Mapping.Action == null)
                 return;
-
-            // Check if we have a delta rather than an absolute value
-            // TODO: set an isDelta attribute on the device
-            Boolean isDelta = (Mapping.EndsWith(".Delta"));
-            if (isDelta)
-                Mapping = Mapping.Split('.')[0];
 
             // If we are in a time warp, drop all actions besides the ones we authorise below
             if (TimeWarp.CurrentRate != 1)
             {
-                switch (Mapping)
+                switch (Mapping.Action)
                 {
                     case "increaseWarp":
                     case "decreaseWarp":
@@ -125,14 +117,49 @@ namespace AltInput
             }
 
             // Check if our mapping is a FlightCtrlState axis
-            if (AxisFields.Where(item => item.Name == Mapping).Any())
-                UpdateAxis(Mapping, isPressed ? Button.Value[(uint)CurrentMode] : 0.0f, 1.0f, isDelta);
+            if (AxisFields.Where(item => item.Name == Mapping.Action).Any())
+            {
+                UpdateAxis(Mapping, value * Mapping.Value, 1.0f);
+                return;
+            }
 
-            // TODO: Something more elegant (possibly using reflection and a class with all these attributes)
-            switch (Mapping)
+            // Most actions only need to occur when the button state is pressed.
+            // We handle the few that don't here
+            if (value < 0.5)
+            {
+                switch (Mapping.Action)
+                {
+                    case "overrideRCS":
+                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
+                        break;
+                    case "activateBrakes":
+                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, false);
+                        break;
+                    case "overrideSAS":
+                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+                        break;
+                    case "activateCustom01":
+                    case "activateCustom02":
+                    case "activateCustom03":
+                    case "activateCustom04":
+                    case "activateCustom05":
+                    case "activateCustom06":
+                    case "activateCustom07":
+                    case "activateCustom08":
+                    case "activateCustom09":
+                    case "activateCustom10":
+                        int.TryParse(Mapping.Action.Substring("activateCustom##".Length), out i);
+                        if (i > 0)
+                            FlightGlobals.ActiveVessel.ActionGroups.SetGroup((KSPActionGroup)(128 << i), true);
+                        break;
+                }
+                return;
+            }
+
+            switch (Mapping.Action)
             {
                 case "increaseWarp":
-                    //do a bunch of checks to see if we can increase the warp rate:
+                    // Do a bunch of checks to see if we can increase the warp rate:
                     if (TimeWarp.CurrentRateIndex + 1 == TimeWarp.fetch.warpRates.Length)
                         break; // Already at max warp
                     if (!FlightGlobals.ActiveVessel.LandedOrSplashed)
@@ -152,72 +179,61 @@ namespace AltInput
                     TimeWarp.SetRate(TimeWarp.CurrentRateIndex - 1, false);
                     break;
                 case "switchMode":
-                    if (isPressed)
+                    Mode NextMode = GetNextMode();
+                    if (NextMode != CurrentMode)
                     {
-                        Mode NextMode = GetNextMode();
-                        if (NextMode != CurrentMode)
-                        {
-                            // Ensure that we reset our controls and buttons before switching
-                            // TODO: drop ResetDevice() and check that no buttons/POVs are active besides mode switch instead
-                            CurrentDevice.ResetDevice();
-                            CurrentMode = NextMode;
-                            ScreenMessages.PostScreenMessage("Input Mode: " + ModeName[(int)CurrentMode],
-                                1f, ScreenMessageStyle.UPPER_CENTER);
-                        }
+                        // Ensure that we reset our controls and buttons before switching
+                        // TODO: Drop ResetDevice() and check that no buttons/POVs are active besides mode switch instead
+                        CurrentDevice.ResetDevice();
+                        CurrentMode = NextMode;
+                        ScreenMessages.PostScreenMessage("Input Mode: " + ModeName[(int)CurrentMode],
+                            1f, ScreenMessageStyle.UPPER_CENTER);
                     }
                     break;
                 case "switchView":
-                    if (isPressed)
-                    {
-                        FlightCamera fc = FlightCamera.fetch;
-                        fc.SetNextMode();
-                    }
+                    FlightCamera fc = FlightCamera.fetch;
+                    fc.SetNextMode();
                     break;
                 case "toggleMapView":
-                    if (isPressed)
-                    {
-                        if (MapView.MapIsEnabled)
-                            MapView.ExitMapView();
-                        else
-                            MapView.EnterMapView();
-                    }
+                    if (MapView.MapIsEnabled)
+                        MapView.ExitMapView();
+                    else
+                        MapView.EnterMapView();
+                    break;
+                case "toggleNavBall":
+                    // https://github.com/Anatid/XML-Documentation-for-the-KSP-API has it,
+                    // but it's not currently not exposed by the official API... :(
+                    // MapView.MapCollapse_navBall.???
                     break;
                 case "activateStaging":
-                    if (isPressed)
-                        Staging.ActivateNextStage();
+                    Staging.ActivateNextStage();
                     break;
                 case "toggleGears":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Gear);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Gear);
                     break;
                 case "toggleLights":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Light);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Light);
                     break;
                 case "overrideRCS":
-                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
+                    FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                     break;
                 case "toggleRCS":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.RCS);
                     break;
                 case "overrideSAS":
-                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
+                    FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
                     break;
                 case "toggleSAS":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.SAS);
                     break;
                 case "toggleAbort":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Abort);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Abort);
                     break;
                 case "activateBrakes":
-                    FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, isPressed);
+                    FlightGlobals.ActiveVessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, true);
                     break;
                 case "toggleBrakes":
-                    if (isPressed)
-                        FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
+                    FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
                     break;
                 case "toggleCustom01":
                 case "toggleCustom02":
@@ -229,7 +245,7 @@ namespace AltInput
                 case "toggleCustom08":
                 case "toggleCustom09":
                 case "toggleCustom10":
-                    int.TryParse(Mapping.Substring("toggleCustom##".Length), out i);
+                    int.TryParse(Mapping.Action.Substring("toggleCustom##".Length), out i);
                     if (i > 0)
                         FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup((KSPActionGroup)(128 << i));
                     break;
@@ -243,26 +259,29 @@ namespace AltInput
                 case "activateCustom08":
                 case "activateCustom09":
                 case "activateCustom10":
-                    int.TryParse(Mapping.Substring("activateCustom##".Length), out i);
+                    int.TryParse(Mapping.Action.Substring("activateCustom##".Length), out i);
                     if (i > 0)
-                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup((KSPActionGroup)(128 << i), isPressed);
+                        FlightGlobals.ActiveVessel.ActionGroups.SetGroup((KSPActionGroup)(128 << i), true);
+                    break;
+                default:
+                    print("AltInput: Unhandled action '" + Mapping.Action + "'");
                     break;
             }
         }
 
-        public static void UpdatePov(AltPOV Pov, int Angle)
+        public static void UpdatePov(AltPOV Pov, int Angle, uint mode)
         {
             // Angle in degrees * 100, or -1 at rest.
             // Start by resetting all positions
             for (var i = 0; i < AltDirectInputDevice.NumPOVPositions; i++)
-                UpdateButton(Pov.Button[i], false);
+                UpdateButton(Pov.Button[i].Mapping[mode], 0.0f);
             if (Angle < 0)
                 return;
             Angle += 36000;
             const int tolerance = 6000; // +/- 60 degrees
             // If our value is less than tolerance degrees apart from a position, we activate it
-            UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4], true);
-            UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4], true);
+            UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4].Mapping[mode], 1.0f);
+            UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4].Mapping[mode], 1.0f);
         }
 
         /// <summary>
