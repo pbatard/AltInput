@@ -107,7 +107,7 @@ namespace AltInput
             {
                 Boolean OneShot;
                 Boolean.TryParse(ini.IniReadValue(Section, Name + ".OneShot"), out OneShot);
-                Control[mode].Type = OneShot ? ControlType.OneShot : ControlType.Continuous;
+                Control[mode].Type = OneShot ? ControlType.OneShot : ControlType.Delta;
             }
         }
 
@@ -192,26 +192,26 @@ namespace AltInput
 #if (DEBUG)
                 if (Device.Axis[i].isAvailable)
                 {
-                    String Mappings = "", Inverted = "", DeadZone = "", Factor = "";
                     for (var m = 0; m < GameState.NumModes; m++)
                     {
+                        String Mappings = "";
                         if (!Device.enabledModes[m]) continue;
                         if (Device.Axis[i].Control[m].Type == ControlType.Axis)
                         {
-                            Mappings += ", Mapping[" + GameState.ModeName[m] + "] = '" + Device.Axis[i].Mapping1[m].Action + "'";
+                            Mappings += ", Mapping = '" + Device.Axis[i].Mapping1[m].Action + "'";
                         }
                         else
                         {
-                            Mappings += ", Mapping.Min[" + GameState.ModeName[m] + "] = '" + Device.Axis[i].Mapping1[m].Action + "'";
-                            Mappings += ", Mapping.Max[" + GameState.ModeName[m] + "] = '" + Device.Axis[i].Mapping2[m].Action + "'";
+                            Mappings += ", Mapping.Min = '" + Device.Axis[i].Mapping1[m].Action + "'";
+                            Mappings += ", Mapping.Max = '" + Device.Axis[i].Mapping2[m].Action + "'";
                         }
-                        Inverted += ", Inverted[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Control[m].Inverted;
-                        DeadZone += ", DeadZone[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Control[m].DeadZone;
-                        DeadZone += ", Factor[" + GameState.ModeName[m] + "] = " + Device.Axis[i].Control[m].Factor;
+                        print("Altinput: Axis #" + (i + 1) + "[" + GameState.ModeName[m] + "] ('" + 
+                            AltDirectInputDevice.AxisList[i, 1] + "'): Range [" +
+                            Device.Axis[i].Range.Minimum + ", " + Device.Axis[i].Range.Maximum + "]" +
+                            ", DeadZone = " + Device.Axis[i].Control[m].DeadZone +
+                            ", Factor = " + Device.Axis[i].Control[m].Factor + Mappings + 
+                            ", Inverted = " + Device.Axis[i].Control[m].Inverted);
                     }
-                    print("Altinput: Axis #" + (i + 1) + "('" + AltDirectInputDevice.AxisList[i, 1] + "'): Range [" +
-                        Device.Axis[i].Range.Minimum + ", " + Device.Axis[i].Range.Maximum + "]" +
-                        DeadZone + Factor +  Mappings + Inverted);
                 }
 #endif
             }
@@ -235,8 +235,8 @@ namespace AltInput
                     if (!Device.enabledModes[m]) continue;
                     String Mappings = "";
                     for (var j = 0; j < AltDirectInputDevice.NumPOVPositions; j++)
-                        Mappings += ((j != 0) ? ", " : "") + AltDirectInputDevice.POVPositionName[j] + " = " +
-                            Device.Pov[i].Button[j].Mapping[m].Action + ", Value = " +
+                        Mappings += ((j != 0) ? ", " : "") + AltDirectInputDevice.POVPositionName[j] + " = '" +
+                            Device.Pov[i].Button[j].Mapping[m].Action + "', Value = " +
                             Device.Pov[i].Button[j].Mapping[m].Value;
                     print("Altinput: POV #" + (i + 1) + " [" + GameState.ModeName[m] + "]: " + Mappings);
                 }
@@ -253,15 +253,14 @@ namespace AltInput
                     ParseMapping(Section, "Button" + (i + 1), Device.Button[i].Mapping, m);
                 }
 #if (DEBUG)
-                String Mappings = "";
                 for (var m = 0; m < GameState.NumModes; m++)
                 {
                     if (!Device.enabledModes[m]) continue;
-                    Mappings += ((m != 0) ? ", " : "") + "Mapping[" + GameState.ModeName[m] + "] = '" +
-                        Device.Button[i].Mapping[m].Action + "', Value[" + GameState.ModeName[m] + "] = " +
-                        Device.Button[i].Mapping[m].Value;
+                    String Mappings = "Mapping = '" + Device.Button[i].Mapping[m].Action + "'";
+                    if (Device.Button[i].Mapping[m].Value != 0.0f)
+                        Mappings += ", Value = " + Device.Button[i].Mapping[m].Value;
+                    print("Altinput: Button #" + (i + 1) + "[" + GameState.ModeName[m] + "]: " + Mappings);
                 }
-                print("Altinput: Button #" + (i + 1) + ": " + Mappings);
 #endif
             }
 

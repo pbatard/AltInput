@@ -36,9 +36,9 @@ namespace AltInput
 
     public enum ControlType
     {
-        OneShot,
-        Continuous,
         Axis,
+        OneShot,
+        Delta,
     }
 
     /// <summary>
@@ -241,7 +241,7 @@ namespace AltInput
                                 else if ((Axis[i].LastValue > MaxThreshold) && (value <= MaxThreshold))
                                     GameState.UpdateButton(Axis[i].Mapping2[CurrentMode], 0.0f);
                                 break;
-                            case ControlType.Continuous:
+                            case ControlType.Delta:
                                 updatedAxes.Add(OffsetName);
                                 GameState.UpdateButton((value < 0.0f) ? Axis[i].Mapping1[CurrentMode] :
                                     Axis[i].Mapping2[CurrentMode], Math.Abs(value));
@@ -258,7 +258,7 @@ namespace AltInput
             for (var i = 0; i < AltDirectInputDevice.AxisList.GetLength(0); i++)
             {
                 // Only update the axis if it's Continuous and we didn't update it above and it's nonzero
-                if ((!Axis[i].isAvailable) || (Axis[i].Control[CurrentMode].Type != ControlType.Continuous) ||
+                if ((!Axis[i].isAvailable) || (Axis[i].Control[CurrentMode].Type != ControlType.Delta) ||
                     (updatedAxes.Contains(AltDirectInputDevice.AxisList[i, 0])) || (Axis[i].LastValue == 0.0f))
                     continue;
                 GameState.UpdateButton((Axis[i].LastValue < 0.0f) ? Axis[i].Mapping1[CurrentMode] :
