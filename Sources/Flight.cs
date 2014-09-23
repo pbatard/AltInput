@@ -73,9 +73,13 @@ namespace AltInput
             print("AltInput: ProcessInput.Start()");
 #endif
             // TODO: Only list/acquire controller if we have some mapping assigned
-            foreach (var Device in Config.DeviceList)
-                Device.OpenDevice();
-            if (Config.iniVersion != Config.currentVersion) {
+            if (!System.IO.File.Exists(Config.ini.path))
+            {
+                ScreenMessages.PostScreenMessage("AltInput: Config file not found (" + Config.ini.path + ")", 10f, ScreenMessageStyle.UPPER_LEFT);
+                return;
+            }
+            if (Config.iniVersion != Config.currentVersion) 
+            {
                 ScreenMessages.PostScreenMessage("AltInput: Config file ignored due to Version mismatch (Got v" +
                     Config.iniVersion.ToString("F01") + ", required v" + Config.currentVersion.ToString("F01") +
                     ")", 10f, ScreenMessageStyle.UPPER_LEFT);
@@ -87,6 +91,8 @@ namespace AltInput
                     ScreenMessageStyle.UPPER_LEFT);
                 return;
             }
+            foreach (var Device in Config.DeviceList)
+                Device.OpenDevice();
             // Add our handler
             if (FlightGlobals.ActiveVessel != null)
                 FlightGlobals.ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);

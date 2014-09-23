@@ -43,7 +43,7 @@ namespace AltInput
         /// <summary>The maximum number of device instances that can be present in a config file</summary>
         private readonly uint NumDevices = 128;
         // Good developers do NOT let end-users fiddle with XML configuration files...
-        private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
+        internal static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
             @"\Plugins\PluginData\AltInput\config.ini");
         private DirectInput directInput = new DirectInput();
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
