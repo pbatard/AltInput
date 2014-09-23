@@ -269,19 +269,26 @@ namespace AltInput
             }
         }
 
-        public static void UpdatePov(AltPOV Pov, int Angle, uint mode)
+        public static void UpdatePov(AltPOV Pov, int Angle, uint mode, Boolean onlyContinuous)
         {
             // Angle in degrees * 100, or -1 at rest.
-            // Start by resetting all positions
-            for (var i = 0; i < AltDirectInputDevice.NumPOVPositions; i++)
-                UpdateButton(Pov.Button[i].Mapping[mode], 0.0f);
+            // Start by resetting all positions if needed
+            if (Angle != Pov.LastValue)
+            {
+                for (var i = 0; i < AltDirectInputDevice.NumPOVPositions; i++)
+                    UpdateButton(Pov.Button[i].Mapping[mode], 0.0f);
+            }
             if (Angle < 0)
                 return;
             Angle += 36000;
             const int tolerance = 6000; // +/- 60 degrees
+            int B1 = ((Angle - tolerance + 8999) / 9000) % 4;
+            int B2 = ((Angle + tolerance) / 9000) % 4;
             // If our value is less than tolerance degrees apart from a position, we activate it
-            UpdateButton(Pov.Button[((Angle - tolerance + 8999) / 9000) % 4].Mapping[mode], 1.0f);
-            UpdateButton(Pov.Button[((Angle + tolerance) / 9000) % 4].Mapping[mode], 1.0f);
+            if ((!onlyContinuous) || (Pov.Button[B1].Continuous[mode]))
+                UpdateButton(Pov.Button[B1].Mapping[mode], 1.0f);
+            if ((!onlyContinuous) || (Pov.Button[B2].Continuous[mode]))
+                UpdateButton(Pov.Button[B2].Mapping[mode], 1.0f);
         }
 
         /// <summary>

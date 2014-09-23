@@ -38,13 +38,15 @@ namespace AltInput
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
-        public static readonly float currentVersion = 1.3f;
-        public static float iniVersion;
+        public static readonly String ini_path = Directory.GetCurrentDirectory() +
+            @"\Plugins\PluginData\AltInput\config.ini";
+        public static readonly System.Version dllVersion = typeof(AltDevice).Assembly.GetName().Version;
+        public static readonly System.Version currentVersion = new System.Version("1.4");
+        public static System.Version iniVersion;
         /// <summary>The maximum number of device instances that can be present in a config file</summary>
         private readonly uint NumDevices = 128;
         // Good developers do NOT let end-users fiddle with XML configuration files...
-        private static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
-            @"\Plugins\PluginData\AltInput\config.ini");
+        public static IniFile ini = null;
         private DirectInput directInput = new DirectInput();
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
@@ -105,9 +107,9 @@ namespace AltInput
                 Control[mode].Type = ControlType.Axis;
             else
             {
-                Boolean OneShot;
-                Boolean.TryParse(ini.IniReadValue(Section, Name + ".OneShot"), out OneShot);
-                Control[mode].Type = OneShot ? ControlType.OneShot : ControlType.Delta;
+                Boolean Continuous;
+                Boolean.TryParse(ini.IniReadValue(Section, Name + ".Continuous"), out Continuous);
+                Control[mode].Type = Continuous ? ControlType.Continuous: ControlType.OneShot;
             }
         }
 
@@ -225,6 +227,8 @@ namespace AltInput
                     {
                         if (!Device.enabledModes[m])
                             continue;
+                        Boolean.TryParse(ini.IniReadValue(Section + "." + GameState.ModeName[0], "POV" + (i + 1) + "." +
+                            AltDirectInputDevice.POVPositionName[j] + ".Continuous"), out Device.Pov[i].Button[j].Continuous[m]);
                         ParseMapping(Section, "POV" + (i + 1) + "." +
                             AltDirectInputDevice.POVPositionName[j], Device.Pov[i].Button[j].Mapping, m);
                     }
@@ -250,6 +254,8 @@ namespace AltInput
                 {
                     if (!Device.enabledModes[m])
                         continue;
+                    Boolean.TryParse(ini.IniReadValue(Section + "." + GameState.ModeName[m], "Button" + (i + 1) + ".Continuous"),
+                        out Device.Button[i].Continuous[m]);
                     ParseMapping(Section, "Button" + (i + 1), Device.Button[i].Mapping, m);
                 }
 #if (DEBUG)
@@ -275,7 +281,14 @@ namespace AltInput
             AltDirectInputDevice Device;
             DeviceClass InstanceClass = DeviceClass.GameControl;
 
-            float.TryParse(ini.IniReadValue("global", "Version"), out iniVersion);
+            print("AltInput: (re)loading configuration");
+            ini = null;
+            DeviceList.Clear();
+            if (!File.Exists(ini_path))
+                return;
+
+            ini = new IniFile(ini_path);
+            iniVersion = new System.Version(ini.IniReadValue("global", "Version"));
             if (iniVersion != currentVersion)
                 return;
 
