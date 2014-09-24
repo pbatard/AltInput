@@ -68,18 +68,6 @@ namespace AltInput
         public void Start()
         {
             // List detected devices and inform the user of any issue
-            if (Config.DetectedList.Count == 0)
-            {
-                var msg = "AltInput: No Controller detected...";
-                print(msg);
-                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
-                return;
-            }
-            foreach (var msg in Config.DetectedList)
-            {
-                print(msg);
-                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
-            }
             if (Config.ini == null)
             {
                 var msg = "AltInput: Config file '" + Config.ini_path + "' was not found";
@@ -93,6 +81,18 @@ namespace AltInput
                 print(msg);
                 ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
                 return;
+            }
+            if (Config.DetectedList.Count == 0)
+            {
+                var msg = "AltInput: No Controller detected...";
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
+                return;
+            }
+            foreach (var msg in Config.DetectedList)
+            {
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
             }
             if (Config.DeviceList.Count == 0)
             {

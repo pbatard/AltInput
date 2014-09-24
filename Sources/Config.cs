@@ -35,11 +35,21 @@ namespace AltInput
     /// <summary>
     /// Handles the input device configuration
     /// </summary>
+    // NOTE: Users of the B9 or other conflicting plugins may want to use
+    // 'KSPAddon.Startup.Instantly' instead of 'KSPAddon.Startup.MainMenu'
+    // below and recompile to get AltInput loaded before those plugins.
+    // This is not enabled by default because:
+    // 1. Doing so removes the ability to reload the config.ini by going
+    //    through the menu, which is an important feature.
+    // 2. You also lose the ability to see the AltInput debug output as
+    //    the last one on the debug console in the menu. If Instantly
+    //    is used, you need to go outside the game to check the log...
     [KSPAddon(KSPAddon.Startup.MainMenu, false)]
     public class Config : MonoBehaviour
     {
-        public static readonly String ini_path = Directory.GetCurrentDirectory() +
-            @"\Plugins\PluginData\AltInput\config.ini";
+        private static readonly String Location = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        public static readonly String ini_path = Location.Substring(0, Location.LastIndexOf('\\')) +
+            @"\PluginData\AltInput\config.ini";
         public static readonly System.Version dllVersion = typeof(AltDevice).Assembly.GetName().Version;
         public static readonly System.Version currentVersion = new System.Version("1.4");
         public static System.Version iniVersion;
