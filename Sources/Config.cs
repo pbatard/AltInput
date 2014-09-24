@@ -271,7 +271,6 @@ namespace AltInput
         /// </summary>
         void ParseInputs()
         {
-            String InterfaceName, ClassName, DeviceName;
             AltDirectInputDevice Device;
             DeviceClass InstanceClass = DeviceClass.GameControl;
 
@@ -279,38 +278,44 @@ namespace AltInput
             if (iniVersion != currentVersion)
                 return;
 
-            for (var i = 1; i <= NumDevices; i++)
-            {
-                String InputName = "input" + i;
-                InterfaceName = ini.IniReadValue(InputName, "Interface");
-                if ((InterfaceName == "") || (ini.IniReadValue(InputName, "Ignore") == "true"))
-                    continue;
-                if (InterfaceName != "DirectInput")
-                {
-                    print("AltInput[" + InputName + "]: Only 'DirectInput' is supported for Interface type");
-                    continue;
-                }
-                ClassName = ini.IniReadValue(InputName, "Class");
-                if (ClassName == "")
-                    ClassName = "GameControl";
-                else if (ClassName != "GameControl")
-                {
-                    print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
-                    continue;   // ignore the device
-                }
-                // Overkill for now, but may come handy if we add support for other DirectInput devices
-                foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
-                {
-                    if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
-                    {
-                        InstanceClass = Class;
-                        break;
-                    }
-                }
-                DeviceName = ini.IniReadValue(InputName, "Name");
+            string installeddevicelist = "";
 
-                foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
+            foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
+            {
+                installeddevicelist += System.Environment.NewLine + dev.InstanceName;
+
+                for (var i = 1; i <= NumDevices; i++)
                 {
+                    String InterfaceName, ClassName, DeviceName;
+
+                    String InputName = "input" + i;
+                    InterfaceName = ini.IniReadValue(InputName, "Interface");
+                    if ((InterfaceName == "") || (ini.IniReadValue(InputName, "Ignore") == "true"))
+                        continue;
+                    if (InterfaceName != "DirectInput")
+                    {
+                        print("AltInput[" + InputName + "]: Only 'DirectInput' is supported for Interface type");
+                        continue;
+                    }
+                    ClassName = ini.IniReadValue(InputName, "Class");
+                    if (ClassName == "")
+                        ClassName = "GameControl";
+                    else if (ClassName != "GameControl")
+                    {
+                        print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
+                        continue;   // ignore the device
+                    }
+                    // Overkill for now, but may come handy if we add support for other DirectInput devices
+                    foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
+                    {
+                        if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
+                        {
+                            InstanceClass = Class;
+                            break;
+                        }
+                    }
+                    DeviceName = ini.IniReadValue(InputName, "Name");
+
                     if ((DeviceName == "") || (dev.InstanceName.Contains(DeviceName)))
                     {
                         // Only add this device if not already in our list
@@ -320,12 +325,13 @@ namespace AltInput
                         SetAttributes(Device, InputName);
                         DeviceList.Add(Device);
                         print("AltInput: Added controller '" + dev.InstanceName + "'");
+                        break;
                     }
                 }
             }
             if (DeviceList.Count == 0)
             {
-                print("AltInput: No controller found");
+                print("AltInput: No configured controller found." + installeddevicelist);
                 return;
             }
         }
