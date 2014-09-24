@@ -35,7 +35,7 @@ namespace AltInput
     /// <summary>
     /// Handles the input device configuration
     /// </summary>
-    [KSPAddon(KSPAddon.Startup.MainMenu, false)]
+    [KSPAddon(KSPAddon.Startup.Instantly, false)]
     public class Config : MonoBehaviour
     {
         public static readonly float currentVersion = 1.3f;
@@ -43,8 +43,9 @@ namespace AltInput
         /// <summary>The maximum number of device instances that can be present in a config file</summary>
         private readonly uint NumDevices = 128;
         // Good developers do NOT let end-users fiddle with XML configuration files...
-        internal static IniFile ini = new IniFile(Directory.GetCurrentDirectory() +
-            @"\Plugins\PluginData\AltInput\config.ini");
+        internal static IniFile ini = new IniFile(
+            System.Reflection.Assembly.GetExecutingAssembly().Location.Substring(0, System.Reflection.Assembly.GetExecutingAssembly().Location.LastIndexOf('\\'))
+            + @"\config.ini");
         private DirectInput directInput = new DirectInput();
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
