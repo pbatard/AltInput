@@ -299,9 +299,7 @@ namespace AltInput
             // Device may have been already acquired - release it
             Joystick.Unacquire();
             ScreenMessages.PostScreenMessage("AltInput: Using Controller '" +
-                Joystick.Information.InstanceName + "': " + Joystick.Capabilities.AxeCount + " Axes, " +
-                Joystick.Capabilities.ButtonCount + " Buttons, " + Joystick.Capabilities.PovCount +
-                 " POV(s)", 10f, ScreenMessageStyle.UPPER_LEFT);
+                Joystick.Information.InstanceName + "'", 10f, ScreenMessageStyle.UPPER_LEFT);
             // Set BufferSize in order to use buffered data.
             Joystick.Properties.BufferSize = 128;
             Joystick.Acquire();

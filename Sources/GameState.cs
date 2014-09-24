@@ -201,9 +201,14 @@ namespace AltInput
                         MapView.EnterMapView();
                     break;
                 case "toggleNavBall":
-                    // https://github.com/Anatid/XML-Documentation-for-the-KSP-API has it,
-                    // but it's not currently not exposed by the official API... :(
-                    // MapView.MapCollapse_navBall.???
+                    // MapView.MapCollapse_navBall is not currently exposed by the API
+                    // so we need to use reflection
+                    ScreenSafeUISlideTab navball = (ScreenSafeUISlideTab)typeof(MapView).
+                        GetField("MapCollapse_navBall").GetValue(MapView.fetch);
+                    if (navball.expanded)
+                        navball.Collapse();
+                    else
+                        navball.Expand();
                     break;
                 case "activateStaging":
                     Staging.ActivateNextStage();
@@ -234,6 +239,12 @@ namespace AltInput
                     break;
                 case "toggleBrakes":
                     FlightGlobals.ActiveVessel.ActionGroups.ToggleGroup(KSPActionGroup.Brakes);
+                    break;
+                case "killThrottle":
+                    UpdatedState.mainThrottle = 0.0f;
+                    break;
+                case "fullThrottle":
+                    UpdatedState.mainThrottle = 1.0f;
                     break;
                 case "toggleCustom01":
                 case "toggleCustom02":

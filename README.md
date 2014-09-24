@@ -91,8 +91,11 @@ use for `Mapping` when adding a `Control = Mapping` line in your config file:
 * `activateStaging`
 * `switchView` - Switch camera view (auto/free/orbital/chase)
 * `toggleMapView` - Switch between Map view and Staging/Docking view
+* `toggleNavBall`
 * `increaseWarp`
 * `decreaseWarp`
+* `killThrottle`
+* `fullThrottle`
 
 Anything that isn't in the list above is not handled.
 

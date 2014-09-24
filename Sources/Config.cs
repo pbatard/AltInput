@@ -50,6 +50,7 @@ namespace AltInput
         private DirectInput directInput = new DirectInput();
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
+        public static List<String> DetectedList = new List<String>();
 
         private void ParseMapping(String Section, String Name, AltMapping[] Mapping, int mode)
         {
@@ -145,7 +146,7 @@ namespace AltInput
                     Device.Axis[i].Range.Maximum = Range.Maximum;
                     Device.Axis[i].Range.FloatRange = 1.0f * (Range.Maximum - Range.Minimum);
 
-                    // TODO: Check if mapping name is valid and if it's already been assigned
+                    // TODO: Check if mapping name is valid
                     for (var m = 0; m < GameState.NumModes; m++)
                     {
                         if (!Device.enabledModes[m])
@@ -273,6 +274,17 @@ namespace AltInput
         }
 
         /// <summary>
+        /// 
+        /// </summary>
+        void Init()
+        {
+            ini = null;
+            DeviceList.Clear();
+            DetectedList.Clear();
+        }
+
+
+        /// <summary>
         /// Process each input section from the config file
         /// </summary>
         void ParseInputs()
@@ -282,8 +294,6 @@ namespace AltInput
             DeviceClass InstanceClass = DeviceClass.GameControl;
 
             print("AltInput: (re)loading configuration");
-            ini = null;
-            DeviceList.Clear();
             if (!File.Exists(ini_path))
                 return;
 
@@ -311,18 +321,9 @@ namespace AltInput
                     print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
                     continue;   // ignore the device
                 }
-                // Overkill for now, but may come handy if we add support for other DirectInput devices
-                foreach (DeviceClass Class in Enum.GetValues(typeof(DeviceClass)))
-                {
-                    if (Enum.GetName(typeof(DeviceClass), Class) == ClassName)
-                    {
-                        InstanceClass = Class;
-                        break;
-                    }
-                }
                 DeviceName = ini.IniReadValue(InputName, "Name");
 
-                foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
+                foreach (var dev in directInput.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AllDevices))
                 {
                     if ((DeviceName == "") || (dev.InstanceName.Contains(DeviceName)))
                     {
@@ -336,10 +337,19 @@ namespace AltInput
                     }
                 }
             }
-            if (DeviceList.Count == 0)
+        }
+
+        /// <summary>
+        /// Build a list of all the game controller detected (whether they have an entry in the config file or not)
+        /// </summary>
+        void ListDevices()
+        {
+            foreach (var dev in directInput.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AllDevices))
             {
-                print("AltInput: No controller found");
-                return;
+                Joystick js = new Joystick(directInput, dev.InstanceGuid);
+                DetectedList.Add("AltInput: Detected Controller '" + dev.InstanceName + "': " +
+                    js.Capabilities.AxeCount + " Axes, " + js.Capabilities.ButtonCount + " Buttons, " +
+                    js.Capabilities.PovCount + " POV(s)");
             }
         }
 
@@ -349,6 +359,8 @@ namespace AltInput
         /// </summary>
         void Awake()
         {
+            Init();
+            ListDevices();
             ParseInputs();
         }
     }

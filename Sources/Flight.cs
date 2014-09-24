@@ -40,10 +40,8 @@ namespace AltInput
         /// <param name="CurrentState">The current control state for the active vessel</param>
         private void ControllerInput(FlightCtrlState CurrentState)
         {
-            // Does this ever occur?
             if (FlightGlobals.ActiveVessel == null)
             {
-                print("FlightGlobals.ActiveVessel == null");
                 GameState.UpdatedState = null;
                 // No need to do anything
                 return;
@@ -69,31 +67,45 @@ namespace AltInput
 
         public void Start()
         {
-#if (DEBUG)
-            print("AltInput: ProcessInput.Start()");
-#endif
-            // TODO: Only list/acquire controller if we have some mapping assigned
-            foreach (var Device in Config.DeviceList)
-                Device.OpenDevice();
-
+            // List detected devices and inform the user of any issue
+            if (Config.DetectedList.Count == 0)
+            {
+                var msg = "AltInput: No Controller detected...";
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
+                return;
+            }
+            foreach (var msg in Config.DetectedList)
+            {
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
+            }
             if (Config.ini == null)
             {
-                ScreenMessages.PostScreenMessage("AltInput: No 'config.ini' file was found",
-                    10f, ScreenMessageStyle.UPPER_LEFT);
+                var msg = "AltInput: Config file '" + Config.ini_path + "' was not found";
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
                 return;
             }
             if (Config.iniVersion != Config.currentVersion) {
-                ScreenMessages.PostScreenMessage("AltInput: Config file ignored due to Version mismatch (Got v" +
-                    Config.iniVersion + ", required v" + Config.currentVersion + ")",
-                    10f, ScreenMessageStyle.UPPER_LEFT);
+                var msg = "AltInput: Config file ignored due to Version mismatch (Got " +
+                    Config.iniVersion + ", required " + Config.currentVersion + ")";
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 10f, ScreenMessageStyle.UPPER_LEFT);
                 return;
             }
             if (Config.DeviceList.Count == 0)
             {
-                ScreenMessages.PostScreenMessage("AltInput: No controller detected",
-                    5f, ScreenMessageStyle.UPPER_LEFT);
+                var msg = "AltInput: No controller configured";
+                print(msg);
+                ScreenMessages.PostScreenMessage(msg, 5f, ScreenMessageStyle.UPPER_LEFT);
                 return;
             }
+
+            // Open the devices that were configured
+            foreach (var Device in Config.DeviceList)
+                Device.OpenDevice();
+
             // Add our handler
             if (FlightGlobals.ActiveVessel != null)
                 FlightGlobals.ActiveVessel.OnFlyByWire += new FlightInputCallback(ControllerInput);
@@ -116,9 +128,6 @@ namespace AltInput
 
         void OnDestroy()
         {
-#if (DEBUG)
-            print("AltInput: ProcessInput.OnDestroy()");
-#endif
             foreach (var Device in Config.DeviceList)
                 Device.CloseDevice();
         }
