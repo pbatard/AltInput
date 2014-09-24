@@ -48,6 +48,7 @@ namespace AltInput
         private DirectInput directInput = new DirectInput();
         private static readonly char[] Separators = { '[', ']', ' ', '\t' };
         public static List<AltDevice> DeviceList = new List<AltDevice>();
+        internal static string FoundControllers = "";
 
         private void ParseMapping(String Section, String Name, AltMapping[] Mapping, int mode)
         {
@@ -278,11 +279,11 @@ namespace AltInput
             if (iniVersion != currentVersion)
                 return;
 
-            string installeddevicelist = "";
+            FoundControllers = "";
 
             foreach (var dev in directInput.GetDevices(InstanceClass, DeviceEnumerationFlags.AllDevices))
             {
-                installeddevicelist += System.Environment.NewLine + dev.InstanceName;
+                FoundControllers += System.Environment.NewLine + dev.InstanceName;
 
                 for (var i = 1; i <= NumDevices; i++)
                 {
@@ -331,7 +332,8 @@ namespace AltInput
             }
             if (DeviceList.Count == 0)
             {
-                print("AltInput: No configured controller found." + installeddevicelist);
+                if (FoundControllers == "") FoundControllers = "None Found.";
+                print("AltInput: No configured controller found." + FoundControllers);
                 return;
             }
         }

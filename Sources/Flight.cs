@@ -87,7 +87,7 @@ namespace AltInput
             }
             if (Config.DeviceList.Count == 0)
             {
-                ScreenMessages.PostScreenMessage("AltInput: No controller detected", 5f,
+                ScreenMessages.PostScreenMessage("AltInput: No configured controller detected" + Environment.NewLine + "Found controllers:" + Config.FoundControllers, 5f,
                     ScreenMessageStyle.UPPER_LEFT);
                 return;
             }
