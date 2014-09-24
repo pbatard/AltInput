@@ -35,11 +35,12 @@ namespace AltInput
     /// <summary>
     /// Handles the input device configuration
     /// </summary>
-    [KSPAddon(KSPAddon.Startup.MainMenu, false)]
+    [KSPAddon(KSPAddon.Startup.Instantly, false)]
     public class Config : MonoBehaviour
     {
-        public static readonly String ini_path = Directory.GetCurrentDirectory() +
-            @"\Plugins\PluginData\AltInput\config.ini";
+        public static readonly String ini_path 
+            = System.Reflection.Assembly.GetExecutingAssembly().Location.Substring(0, System.Reflection.Assembly.GetExecutingAssembly().Location.LastIndexOf('\\'))
+            + @"\config.ini");
         public static readonly System.Version dllVersion = typeof(AltDevice).Assembly.GetName().Version;
         public static readonly System.Version currentVersion = new System.Version("1.4");
         public static System.Version iniVersion;
