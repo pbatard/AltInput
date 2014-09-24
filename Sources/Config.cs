@@ -43,8 +43,6 @@ namespace AltInput
         public static readonly System.Version dllVersion = typeof(AltDevice).Assembly.GetName().Version;
         public static readonly System.Version currentVersion = new System.Version("1.4");
         public static System.Version iniVersion;
-        /// <summary>The maximum number of device instances that can be present in a config file</summary>
-        private readonly uint NumDevices = 128;
         // Good developers do NOT let end-users fiddle with XML configuration files...
         public static IniFile ini = null;
         private DirectInput directInput = new DirectInput();
@@ -274,26 +272,17 @@ namespace AltInput
         }
 
         /// <summary>
-        /// 
-        /// </summary>
-        void Init()
-        {
-            ini = null;
-            DeviceList.Clear();
-            DetectedList.Clear();
-        }
-
-
-        /// <summary>
         /// Process each input section from the config file
         /// </summary>
         void ParseInputs()
         {
-            String InterfaceName, ClassName, DeviceName;
+            String InterfaceName, ClassName;
             AltDirectInputDevice Device;
-            DeviceClass InstanceClass = DeviceClass.GameControl;
 
             print("AltInput: (re)loading configuration");
+            ini = null;
+            DeviceList.Clear();
+            DetectedList.Clear();
             if (!File.Exists(ini_path))
                 return;
 
@@ -302,54 +291,48 @@ namespace AltInput
             if (iniVersion != currentVersion)
                 return;
 
-            for (var i = 1; i <= NumDevices; i++)
-            {
-                String InputName = "input" + i;
-                InterfaceName = ini.IniReadValue(InputName, "Interface");
-                if ((InterfaceName == "") || (ini.IniReadValue(InputName, "Ignore") == "true"))
-                    continue;
-                if (InterfaceName != "DirectInput")
-                {
-                    print("AltInput[" + InputName + "]: Only 'DirectInput' is supported for Interface type");
-                    continue;
-                }
-                ClassName = ini.IniReadValue(InputName, "Class");
-                if (ClassName == "")
-                    ClassName = "GameControl";
-                else if (ClassName != "GameControl")
-                {
-                    print("AltInput[" + InputName + "]: '" + ClassName + "' is not an allowed Class value");
-                    continue;   // ignore the device
-                }
-                DeviceName = ini.IniReadValue(InputName, "Name");
+            List<String> sections = ini.IniReadAllSections();
+            // Remove the [global] and [___.Mode] sections from our list
+            sections.RemoveAll(s => s.Equals("global"));
+            foreach (var modeName in GameState.ModeName)
+                sections.RemoveAll(s => s.EndsWith("." + modeName));
 
-                foreach (var dev in directInput.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AllDevices))
-                {
-                    if ((DeviceName == "") || (dev.InstanceName.Contains(DeviceName)))
-                    {
-                        // Only add this device if not already in our list
-                        if (DeviceList.Where(item => ((AltDirectInputDevice)item).InstanceGuid == dev.InstanceGuid).Any())
-                            continue;
-                        Device = new AltDirectInputDevice(directInput, InstanceClass, dev.InstanceGuid);
-                        SetAttributes(Device, InputName);
-                        DeviceList.Add(Device);
-                        print("AltInput: Added controller '" + dev.InstanceName + "'");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Build a list of all the game controller detected (whether they have an entry in the config file or not)
-        /// </summary>
-        void ListDevices()
-        {
             foreach (var dev in directInput.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AllDevices))
             {
                 Joystick js = new Joystick(directInput, dev.InstanceGuid);
                 DetectedList.Add("AltInput: Detected Controller '" + dev.InstanceName + "': " +
                     js.Capabilities.AxeCount + " Axes, " + js.Capabilities.ButtonCount + " Buttons, " +
                     js.Capabilities.PovCount + " POV(s)");
+
+                foreach(var section in sections) 
+                {
+                    if (dev.InstanceName.Contains(section))
+                    {
+                        InterfaceName = ini.IniReadValue(section, "Interface");
+                        if ((InterfaceName == "") || (ini.IniReadValue(section, "Ignore") == "true"))
+                            break;
+                        if (InterfaceName != "DirectInput")
+                        {
+                            print("AltInput[" + section + "]: Only 'DirectInput' is supported for Interface type");
+                            continue;
+                        }
+                        ClassName = ini.IniReadValue(section, "Class");
+                        if (ClassName == "")
+                            ClassName = "GameControl";
+                        else if (ClassName != "GameControl")
+                        {
+                            print("AltInput[" + section + "]: '" + ClassName + "' is not an allowed Class value");
+                            continue;   // ignore the device
+                        }
+                        // Only add this device if not already in our list
+                        if (DeviceList.Where(item => ((AltDirectInputDevice)item).InstanceGuid == dev.InstanceGuid).Any())
+                            continue;
+                        Device = new AltDirectInputDevice(directInput, DeviceClass.GameControl, dev.InstanceGuid);
+                        SetAttributes(Device, section);
+                        DeviceList.Add(Device);
+                        print("AltInput: Added controller '" + dev.InstanceName + "'");
+                    }
+                }
             }
         }
 
@@ -359,8 +342,6 @@ namespace AltInput
         /// </summary>
         void Awake()
         {
-            Init();
-            ListDevices();
             ParseInputs();
         }
     }

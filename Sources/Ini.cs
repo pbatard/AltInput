@@ -20,6 +20,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Collections.Generic;
 
 namespace Ini
 {
@@ -35,7 +36,9 @@ namespace Ini
             string key, string val, string filePath);
         [DllImport("kernel32")]
         private static extern int GetPrivateProfileString(string section,
-            string key, string def, StringBuilder retVal,
+            // Do not be tempted to use a char[] array here.
+            // If you do, Windows WILL FUBAR YOUR CHARACTER ENCODING!!!
+            string key, string def, [In, Out] byte[] retVal,
             int size, string filePath);
 
         /// <summary>
@@ -69,10 +72,40 @@ namespace Ini
         /// <returns></returns>
         public string IniReadValue(string Section, string Key)
         {
-            StringBuilder temp = new StringBuilder(255);
-            int i = GetPrivateProfileString(Section, Key, "", temp,
-                                            255, this.path);
-            return temp.ToString();
+            byte[] temp = new byte[256];
+            int len = GetPrivateProfileString(Section, Key, "", temp,
+                                            temp.Length, this.path);
+            StringBuilder sb = new StringBuilder(len);
+            // I lost way too much time on account of C# lousy handling of
+            // strings and character encoding => Don't take any risks.
+            for (var i = 0; i < len; i++)
+                sb.Append((char)temp[i]);
+            return sb.ToString();
+        }
+
+
+        /// <summary>
+        /// Read all the sections from the Ini File
+        /// </summary>
+        /// <returns></returns>
+        public List<string> IniReadAllSections()
+        {
+            List<string> list = new List<string>();
+            byte[] temp = new byte[4096];
+            StringBuilder sb = new StringBuilder(256);
+            int len = GetPrivateProfileString(null, null, "", temp,
+                                            temp.Length, this.path);
+            for (var i = 0; i < len; i++)
+            {
+                if (temp[i] == '\0')
+                {
+                    list.Add(sb.ToString());
+                    sb.Length = 0;
+                }
+                else
+                    sb.Append((char)temp[i]);
+            }
+            return list;
         }
     }
 }
