@@ -1,0 +1,13 @@
+o Version 0.9.1 (2014.09.25)
+    Add 'killThrottle', 'fullThrottle' and 'toggleNavBall'
+    Add 'Continuous' mode for buttons
+    Rename 'OneShot' attribute for axes to 'Continuous'
+    Drop the 'Name' attribute and use the controller name as section header
+    Allow reload of config.ini during the game (Apply your modifications *during*
+      flight mode, then go to the menu and back to flight mode)
+    Add a more explicit message when the config file is not found
+    Provide a list of all detected devices, to help identify the section name to use
+    Use a relative path to locate the config file (Courtesy of enodatio)
+
+o Version 0.9.0 (2014.09.19)
+    First official release

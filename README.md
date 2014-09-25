@@ -37,10 +37,13 @@ Usage
 
 * If needed, copy `AltInput.dll`, `SharpDX.dll` and `SharpDX.DirectInput.dll` into the KSP 
  `Plugins` directory (typically `C:\Program Files (x86)\Steam\SteamApps\common\Kerbal Space Program\Plugins`)
-* Edit `PluginData\AltInput\config.ini` according to your settings and copy the 
-  whole `PluginData`directory to the same directory where you copied the DLL files.
-* Play. ;) If your joystick is properly detected, you will get a notification (in the 
-  upper left corner) and you should be able to use it to control the ship.
+* Copy the whole `PluginData` directory to the same directory where you copied 
+  the DLL files and if needed, edit `PluginData\AltInput\config.ini` according 
+  to your settings.
+* Play. ;) If your joystick is properly configured, you will get a notification 
+  (in the upper left corner) and you should be able to use it to control the 
+  ship. Or, if you need to create a new entry, you will also be able to find the 
+  name you should use to create a new controller section.
 
 
 Configuration
