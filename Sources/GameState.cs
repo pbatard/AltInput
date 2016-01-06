@@ -323,11 +323,11 @@ namespace AltInput
             }
 
             // If SAS is on, we need to override it or else our changes are ignored
-            VesselSAS VesselSAS = FlightGlobals.ActiveVessel.vesselSAS;
-            Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > VesselSAS.controlDetectionThreshold) ||
-                                    (Math.Abs(CurrentState.yaw) > VesselSAS.controlDetectionThreshold) ||
-                                    (Math.Abs(CurrentState.roll) > VesselSAS.controlDetectionThreshold);
-            VesselSAS.ManualOverride(overrideSAS);
+            VesselAutopilot.VesselSAS vesselSAS = FlightGlobals.ActiveVessel.Autopilot.SAS;
+            Boolean overrideSAS = (Math.Abs(CurrentState.pitch) > vesselSAS.controlDetectionThreshold) ||
+                                    (Math.Abs(CurrentState.yaw) > vesselSAS.controlDetectionThreshold) ||
+                                    (Math.Abs(CurrentState.roll) > vesselSAS.controlDetectionThreshold);
+            vesselSAS.ManualOverride(overrideSAS);
         }
     }
 }
